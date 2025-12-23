@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Calendar, Target, TrendingUp, AlertTriangle, X, Shield, Users, Clock, Zap, Brain, BarChart, LineChart } from 'lucide-react'
+import { Calendar, Target, TrendingUp, AlertTriangle, X, Shield, Users, Clock, Zap, Brain, BarChart } from 'lucide-react'
 import AdvancedStatsPanel from '../components/AdvancedStatsPanel'
 
 const Fixtures = () => {

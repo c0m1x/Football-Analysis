@@ -7,7 +7,7 @@ from utils.logger import setup_logger
 from services.cache_service import get_cache_service
 from services.match_analysis_service import get_match_analysis_service
 from services.advanced_stats_analyzer import get_advanced_stats_analyzer
-from typing import List, Dict, Any, Optional
+from typing import Optional
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -360,74 +360,6 @@ async def get_all_fixtures():
 
 
 @router.get("/fixtures/upcoming")
-async def get_upcoming_fixtures(limit: int = 5):
-    """
-    Get upcoming Gil Vicente fixtures (formatted for Dashboard compatibility)
-    
-    🔄 CACHED: Uses cached data from /fixtures/all
-    """
-    # Get all fixtures (will use cache if available)
-    all_data = await get_all_fixtures()
-    
-    # Filter upcoming fixtures
-    upcoming_raw = [f for f in all_data['fixtures'] if f['status'] == 'upcoming']
-    
-    # Transform to Dashboard-compatible format
-    upcoming_formatted = []
-    for f in upcoming_raw[:limit]:
-        is_gil_home = f.get('gil_vicente_home', False)
-        
-        formatted = {
-            "fixture": {
-                "id": f.get('match_id'),
-                "date": f.get('datetime') or f"{f.get('date')}T{f.get('time')}",
-                "venue": {
-                    "name": "Estádio Cidade de Barcelos" if is_gil_home else f"Estádio {f.get('opponent_name')}"
-                }
-            },
-            "league": {
-                "name": "Liga Portugal",
-                "country": "Portugal"
-            },
-            "teams": {
-                "home": {
-                    "id": 228 if is_gil_home else int(f.get('opponent_id', 0)),
-                    "name": "Gil Vicente" if is_gil_home else f.get('opponent_name')
-                },
-                "away": {
-                    "id": int(f.get('opponent_id', 0)) if is_gil_home else 228,
-                    "name": f.get('opponent_name') if is_gil_home else "Gil Vicente"
-                }
-            }
-        }
-        upcoming_formatted.append(formatted)
-    
-    return {
-        "fixtures": upcoming_formatted,
-        "count": len(upcoming_formatted),
-        "total_upcoming": len(upcoming_raw),
-        "data_source": all_data.get('data_source', 'api'),
-        "cache_info": all_data.get('cache_info', '')
-    }
-async def get_upcoming_fixtures(limit: int = 5):
-    """
-    Get upcoming Gil Vicente fixtures
-    
-    🔄 CACHED: Uses cached data from /fixtures/all
-    """
-    # Get all fixtures (will use cache if available)
-    all_data = await get_all_fixtures()
-    
-    # Filter upcoming fixtures
-    upcoming = [f for f in all_data['fixtures'] if f['status'] == 'upcoming']
-    
-    return {
-        "fixtures": upcoming[:limit],
-        "count": len(upcoming[:limit]),
-        "total_upcoming": len(upcoming),
-        "data_source": all_data.get('data_source', 'api'),
-        "cache_info": all_data.get('cache_info', '')
-    }
 
 @router.get("/opponents")
 async def get_opponents():

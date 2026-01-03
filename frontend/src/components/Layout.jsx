@@ -1,15 +1,21 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { Home, Calendar, Users, TrendingUp } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Home, Calendar, Users, TrendingUp, LogOut } from 'lucide-react'
 
 const Layout = ({ children }) => {
   const location = useLocation()
+  const navigate = useNavigate()
   
   const navItems = [
     { path: '/', label: 'Dashboard', icon: Home },
     { path: '/fixtures', label: 'Fixtures', icon: Calendar },
     { path: '/opponents', label: 'Opponents', icon: Users },
   ]
+  
+  const handleLogout = () => {
+    localStorage.removeItem('isAuthenticated')
+    navigate('/login')
+  }
   
   return (
     <div className="min-h-screen flex flex-col">
@@ -24,6 +30,13 @@ const Layout = ({ children }) => {
                 <p className="text-sm text-gray-300">Tactical Intelligence Platform</p>
               </div>
             </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+            >
+              <LogOut size={20} />
+              <span>Sair</span>
+            </button>
           </div>
         </div>
       </header>
@@ -58,9 +71,7 @@ const Layout = ({ children }) => {
       {/* Footer */}
       <footer className="bg-gray-800 text-white py-4">
         <div className="container mx-auto px-4 text-center">
-          <p className="text-sm">
-            © 2025 Gil Vicente Tactical Intelligence Platform — Unofficial fan-made project (not affiliated with Gil Vicente FC; not requested/endorsed; no remuneration).
-          </p>
+          <p className="text-sm">© 2025-2026 Gil Vicente FC - Tactical Intelligence Platform</p>
         </div>
       </footer>
     </div>

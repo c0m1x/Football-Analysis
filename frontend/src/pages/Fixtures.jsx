@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { API_BASE_URL } from '../config/api'
 import { useQuery } from '@tanstack/react-query'
 import { Calendar, Target, TrendingUp, AlertTriangle, X, Shield, Users, Clock, Zap, Brain, BarChart } from 'lucide-react'
 import AdvancedStatsPanel from '../components/AdvancedStatsPanel'
@@ -14,7 +15,7 @@ const Fixtures = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['allFixtures'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/v1/fixtures/all')
+      const res = await fetch(`${API_BASE_URL}/api/v1/fixtures/all`)
       return res.json()
     }
   })
@@ -31,7 +32,7 @@ const Fixtures = () => {
     setLoadingStats(true)
     try {
       const res = await fetch(
-        `http://localhost:8000/api/v1/opponent-stats/${fixture.opponent_id}?opponent_name=${encodeURIComponent(fixture.opponent_name)}`
+        ``${API_BASE_URL}`/api/v1/opponent-stats/${fixture.opponent_id}?opponent_name=${encodeURIComponent(fixture.opponent_name)}`
       )
       const data = await res.json()
       setStatistics(data)
@@ -45,7 +46,7 @@ const Fixtures = () => {
     setLoadingPlan(true)
     try {
       const res = await fetch(
-        `http://localhost:8000/api/v1/tactical-plan/${fixture.opponent_id}?opponent_name=${encodeURIComponent(fixture.opponent_name)}`
+        ``${API_BASE_URL}`/api/v1/tactical-plan/${fixture.opponent_id}?opponent_name=${encodeURIComponent(fixture.opponent_name)}`
       )
       const data = await res.json()
       setTacticalPlan(data)

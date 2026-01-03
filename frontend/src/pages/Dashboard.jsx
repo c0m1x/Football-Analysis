@@ -1,4 +1,5 @@
 import React from 'react'
+import { API_BASE_URL } from '../config/api'
 import { useQuery } from '@tanstack/react-query'
 import { Calendar, Users, TrendingUp, AlertCircle, MapPin, Clock } from 'lucide-react'
 
@@ -7,7 +8,7 @@ const Dashboard = () => {
   const { data: fixturesData, isLoading: fixturesLoading } = useQuery({
     queryKey: ['upcoming-fixtures'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/v1/fixtures/upcoming?limit=1')
+      const res = await fetch(`${API_BASE_URL}/api/v1/fixtures/upcoming?limit=1`)
       return res.json()
     }
   })
@@ -16,7 +17,7 @@ const Dashboard = () => {
   const { data: opponentsData } = useQuery({
     queryKey: ['opponents'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/v1/opponents')
+      const res = await fetch(`${API_BASE_URL}/api/v1/opponents`)
       return res.json()
     }
   })

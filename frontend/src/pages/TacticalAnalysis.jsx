@@ -1,4 +1,5 @@
 import React from 'react'
+import { API_BASE_URL } from '../config/api'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Brain, Users, Zap, Target, AlertTriangle } from 'lucide-react'
@@ -16,7 +17,7 @@ const TacticalAnalysis = () => {
     queryKey: ['tactical-plan', teamId, opponentName],
     queryFn: async () => {
       const res = await fetch(
-        `http://localhost:8000/api/v1/tactical-plan/${teamId}?opponent_name=${encodeURIComponent(opponentName)}`
+        ``${API_BASE_URL}`/api/v1/tactical-plan/${teamId}?opponent_name=${encodeURIComponent(opponentName)}`
       )
       if (!res.ok) {
         const detail = await res.text().catch(() => '')

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { API_BASE_URL } from '../config/api'
 import { useQuery } from '@tanstack/react-query'
 import { Users, TrendingUp, TrendingDown, Activity, Target, Shield, Zap } from 'lucide-react'
 import AdvancedStatsPanel from '../components/AdvancedStatsPanel'
@@ -9,7 +10,7 @@ const Opponents = () => {
   const { data: opponentsData, isLoading: opponentsLoading } = useQuery({
     queryKey: ['opponents'],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/v1/opponents')
+      const res = await fetch(`${API_BASE_URL}/api/v1/opponents`)
       return res.json()
     }
   })
@@ -27,7 +28,7 @@ const Opponents = () => {
     queryKey: ['opponent-tactical', selectedOpponent],
     queryFn: async () => {
       if (!selectedOpponent) return null
-      const res = await fetch(`http://localhost:8000/api/v1/opponents/${selectedOpponent}/tactical`)
+      const res = await fetch(``${API_BASE_URL}`/api/v1/opponents/${selectedOpponent}/tactical`)
       if (!res.ok) return null
       return res.json()
     },
@@ -38,7 +39,7 @@ const Opponents = () => {
     queryKey: ['opponent-form', selectedOpponent],
     queryFn: async () => {
       if (!selectedOpponent) return null
-      const res = await fetch(`http://localhost:8000/api/v1/opponents/${selectedOpponent}/recent`)
+      const res = await fetch(``${API_BASE_URL}`/api/v1/opponents/${selectedOpponent}/recent`)
       if (!res.ok) return null
       return res.json()
     },
@@ -50,7 +51,7 @@ const Opponents = () => {
     queryFn: async () => {
       if (!selectedOpponent || !selectedOpponentName) return null
       const res = await fetch(
-        `http://localhost:8000/api/v1/opponent-stats/${selectedOpponent}?opponent_name=${encodeURIComponent(selectedOpponentName)}`
+        ``${API_BASE_URL}`/api/v1/opponent-stats/${selectedOpponent}?opponent_name=${encodeURIComponent(selectedOpponentName)}`
       )
       return res.json()
     },

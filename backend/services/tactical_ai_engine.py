@@ -438,6 +438,11 @@ class TacticalAIEngine:
         pressing = stats.get('pressing_structure', {})
         defense = stats.get('defensive_actions', {})
         possession = stats.get('possession_control', {})
+        matches_analyzed = stats.get("matches_analyzed")
+        try:
+            matches_analyzed = int(matches_analyzed) if matches_analyzed is not None else 1
+        except Exception:
+            matches_analyzed = 1
 
         try:
             ppda = float(pressing.get('PPDA', 12) or 12)
@@ -463,10 +468,24 @@ class TacticalAIEngine:
         if defense.get('defensive_rating') in ['Vulnerable', 'Solid']:
             score += 10
 
+        # More data -> more stable recommendations
+        if matches_analyzed >= 8:
+            score += 10
+        elif matches_analyzed >= 5:
+            score += 6
+        elif matches_analyzed >= 3:
+            score += 3
+
+        is_estimated = bool(stats.get("estimated", False))
+        if is_estimated:
+            score -= 10
+
         return {
             "overall_confidence": min(95, score),
             "recommendation_reliability": "HIGH" if score >= 85 else "MEDIUM",
-            "data_quality": "Good - based on last match analysis"
+            "data_quality": (
+                f"{'Estimated' if is_estimated else 'Observed'} - based on {matches_analyzed} match(es)"
+            ),
         }
 
 

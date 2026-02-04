@@ -20,11 +20,11 @@ logger = setup_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     logger.info("Starting Gil Vicente Tactical Intelligence Platform...")
-    logger.info(f"🎯 Real-time match analysis enabled")
-    logger.info(f"⚽ Using Free API Live Football Data")
-    logger.info(f"📊 Enhanced opponent statistics available")
+    logger.info("Real-time match analysis enabled")
+    logger.info("Using Free API Live Football Data")
+    logger.info("Enhanced opponent statistics available")
     logger.info(f"Automated tactical planning available")
-    logger.info(f"🔑 API fallback system active")
+    logger.info("API fallback system active")
     yield
     logger.info("Shutting down application...")
 
@@ -42,7 +42,7 @@ app = FastAPI(
 # CORS middleware - MUST be before routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins in development
+    allow_origins=getattr(settings, "CORS_ORIGINS", ["*"]) or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,7 +75,7 @@ async def root():
             "Comprehensive opponent statistics",
             "Tactical plan generation with evidence",
             "Form analysis and predictions",
-            "Automatic API key fallback"
+            "Scraper export fallback for offline mode"
         ],
         "endpoints": {
             "health": "/api/v1/health",

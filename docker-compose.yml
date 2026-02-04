@@ -65,8 +65,6 @@ services:
     container_name: gil_vicente_frontend
     ports:
       - "3000:3000"
-    environment:
-      REACT_APP_API_URL: http://localhost:8000/api/v1
     depends_on:
       - backend
 

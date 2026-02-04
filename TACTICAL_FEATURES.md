@@ -120,7 +120,7 @@ Gil Vicente Football Analysis is a tactical intelligence platform designed for c
 ---
 
 ### 3. Tactical Recommendation Engine
-**File:** `backend/services/tactical_recommendation_engine.py`
+**File:** `backend/services/tactical_ai_engine.py`
 
 **Features:**
 - Formation suggestions based on opponent weaknesses
@@ -130,7 +130,7 @@ Gil Vicente Football Analysis is a tactical intelligence platform designed for c
 - Player-specific role assignments
 - In-game adjustment triggers
 
-**Rule-Based Logic:**
+**Rule-Based Logic (example):**
 - IF opponent PPDA < 10 → Recommend controlled possession build-up
 - IF opponent pass accuracy < 75% → Recommend high pressing
 - IF opponent allows > 1.5 xG/game → Recommend aggressive attacking approach
@@ -236,7 +236,7 @@ API Endpoint (tactical_plan.py)
     ↓
 Match Analysis Service
     ↓
-├─→ Football API Service (fetch matches)
+├─→ SofaScore Service / Scraper Export (fetch matches)
 ├─→ Advanced Stats Analyzer (process data)
 ├─→ Tactical Engine (generate recommendations)
 └─→ Recommendation Engine (create match brief)
@@ -323,7 +323,7 @@ POST /api/v1/tactical-plan/123
 - Predictive outcome modeling
 
 ### Data Sources
-- Current: API-Football (basic stats)
+- Current: SofaScore scraping + scraper export fallback
 - Future: Event-level data providers
 - Goal: Real-time tracking data
 

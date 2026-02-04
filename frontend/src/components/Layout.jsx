@@ -1,15 +1,14 @@
 import React from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Home, Calendar, Users, TrendingUp, LogOut } from 'lucide-react'
+import { Calendar, Target, TrendingUp, LogOut } from 'lucide-react'
 
 const Layout = ({ children }) => {
   const location = useLocation()
   const navigate = useNavigate()
   
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: Home },
-    { path: '/fixtures', label: 'Fixtures', icon: Calendar },
-    { path: '/opponents', label: 'Opponents', icon: Users },
+    { path: '/', label: 'Próximo Adversário', icon: Target },
+    { path: '/calendar', label: 'Calendário', icon: Calendar },
   ]
   
   const handleLogout = () => {
@@ -50,7 +49,7 @@ const Layout = ({ children }) => {
                 key={path}
                 to={path}
                 className={`flex items-center space-x-2 py-4 border-b-2 transition-colors ${
-                  location.pathname === path
+                  (path === '/' ? location.pathname === '/' : location.pathname.startsWith(path))
                     ? 'border-[#C41E3A] text-[#C41E3A]'
                     : 'border-transparent text-gray-600 hover:text-[#C41E3A]'
                 }`}

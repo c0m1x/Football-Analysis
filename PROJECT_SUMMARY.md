@@ -7,7 +7,7 @@
 **EN:** This is an **unofficial fan-made** project. **Gil Vicente FC** did **not** request or endorse it, is **not** affiliated with it, and **no** remuneration was provided.
 
 ##  Project Completion Status: **READY FOR DEVELOPMENT**
-## 🧾 Data Sources & Accuracy Notes
+## Data Sources & Accuracy Notes
 
 This platform mixes **real fixture data** with **derived/estimated tactical metrics**.
 
@@ -46,7 +46,6 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 -  `api/routes/tactical.py` - Tactical analysis endpoints
 
 #### Services
--  `services/football_api_service.py` - External API integration with retry logic
 -  `services/tactical_analysis_service.py` - Complete tactical analysis engine
   - Formation analysis
   - Playing style metrics
@@ -164,7 +163,7 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 ### Phase 1 - MVP (COMPLETED)
 
 #### Data Ingestion 
-- Football API integration (API-Football via RapidAPI)
+- SofaScore scraping + local scraper export fallback
 - Gil Vicente fixture tracking
 - Opponent match history fetching
 - Configurable data limits
@@ -201,7 +200,7 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 
 ---
 
-## 🏗️ Technical Architecture
+## Technical Architecture
 
 ### Backend Stack
 - **Framework**: FastAPI 0.104.1
@@ -253,7 +252,7 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
 ### Tables Created
 1. **teams** - Team information (Gil Vicente + opponents)
@@ -269,7 +268,7 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 
 ---
 
-## 🚀 Ready to Use
+## Ready to Use
 
 ### What Works Now
 1. **Docker Deployment** - Complete stack with one command
@@ -277,17 +276,16 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 3. **Database** - PostgreSQL with schema
 4. **Frontend** - React dashboard with routing
 5. **Tactical Engine** - Full analysis and recommendations
-6. **API Integration** - Ready for external football data
+6. **Data Integration** - SofaScore scraping + scraper export fallback
 
 ### What Needs Configuration
-1. **API Key** - Add Football API key to `.env`
-2. **Database** - Optional: customize credentials
-3. **CORS** - Optional: update allowed origins
-4. **Redis** - Optional: add password for production
+1. **Database** - Optional: customize credentials
+2. **CORS** - Optional: update allowed origins
+3. **Redis** - Optional: add password for production
 
 ---
 
-## 📈 Next Steps (Phase 2 & 3)
+## Next Steps (Phase 2 & 3)
 
 ### Phase 2 - Intelligence Layer (Future)
 - [ ] Advanced pattern detection with ML
@@ -305,7 +303,7 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 
 ---
 
-## 🎓 How to Start Development
+## How to Start Development
 
 ### 1. Quick Start
 ```bash
@@ -313,25 +311,26 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 ```
 
 ### 2. Access Platform
-- Dashboard: http://localhost:3000
+- Frontend: http://localhost:3000
+- Pages:
+  - Next Opponent: http://localhost:3000/
+  - Calendar: http://localhost:3000/calendar
 - API: http://localhost:8000
 - Docs: http://localhost:8000/docs
 
 ### 3. Begin Customization
-- Add API key to `.env`
 - Explore API documentation
 - Customize frontend components
 - Extend tactical analysis rules
 
 ---
 
-## 📚 Documentation Index
+## Documentation Index
 
 - **[README.md](README.md)** - Main documentation
 - **[QUICKSTART.md](QUICKSTART.md)** - Fast setup guide  
 - **[API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)** - API reference
 - **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** - Production guide
-- **[PROJECT_STRUCTURE.txt](PROJECT_STRUCTURE.txt)** - File tree
 
 ---
 
@@ -353,7 +352,7 @@ This platform mixes **real fixture data** with **derived/estimated tactical metr
 
 ---
 
-## 🏁 Project Status: **PRODUCTION READY (MVP)**
+## Project Status: **PRODUCTION READY (MVP)**
 
 The Gil Vicente Tactical Intelligence Platform is fully implemented with:
 - Complete backend API
@@ -364,7 +363,6 @@ The Gil Vicente Tactical Intelligence Platform is fully implemented with:
 - Comprehensive documentation
 
 **Ready for:**
-- API key configuration
 - Data integration
 - Testing with real match data
 - Production deployment
@@ -372,6 +370,6 @@ The Gil Vicente Tactical Intelligence Platform is fully implemented with:
 
 ---
 
-**Built with ⚽ for Gil Vicente FC**
+**Built for Gil Vicente FC**
 
 *Last Updated: December 21, 2024*

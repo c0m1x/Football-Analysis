@@ -60,6 +60,13 @@ yarn-error.log
 frontend/build/
 frontend/dist/
 
+# Local data exports
+data/scraper_exports/*
+!data/scraper_exports/README.md
+gil_vicente_next_opponent_*.json
+gil_vicente_next_opponent_*.csv
+data/.scrape_done_*
+
 # Testing
 .coverage
 htmlcov/

@@ -15,7 +15,7 @@ Get up and running in 5 minutes.
 ## Prerequisites
 
 - **Docker** & **Docker Compose** installed
-- **Football API Key** from [API-Football via RapidAPI](https://rapidapi.com/api-sports/api/api-football)
+- No API keys are required for the default SofaScore scraping mode
 
 ---
 
@@ -30,14 +30,35 @@ cd "Football Analysis"
 # Copy environment template
 cp .env.example .env
 
-# Edit .env and add your API key
+# Edit .env
 nano .env  # or use your preferred editor
 ```
 
-**Required: Add your API key in .env:**
+**Optional: enable SofaScore tactical stats (recommended):**
 ```env
-FOOTBALL_API_KEY=your_api_key_here
+SOFASCORE_ENABLED=True
 ```
+
+If SofaScore search is blocked (403), you can pin team IDs and skip the search step:
+
+```env
+SOFASCORE_TEAM_ID_MAP_JSON={"Gil Vicente": 12345}
+```
+
+(You can usually find the team id in the sofascore.com team URL: `.../team/football/<slug>/<id>`.)
+
+If SofaScore match statistics are blocked (HTTP 403), you can also use the Selenium scraper export fallback:
+
+1. Run the scraper to generate JSON exports:
+```bash
+python3 scrapper/scrapper.py
+```
+
+2. (Optional) Point the backend to the folder containing those exports (defaults to `data/scraper_exports/`):
+```env
+SCRAPER_EXPORT_DIR=/path/to/Football Analysis/data/scraper_exports
+```
+
 
 ### 2. Start Services
 
@@ -138,6 +159,13 @@ curl -X POST http://localhost:8000/api/v1/tactical/analyze \
   -d @matches.json
 ```
 
+
+### Export SofaScore stats (JSON)
+```bash
+python3 scripts/sofascore_sync.py --team "Gil Vicente" --limit 5 --pretty
+python3 scripts/sofascore_sync.py --team "Gil Vicente" --team-id 12345 --limit 5 --pretty
+```
+
 ---
 
 ## Key Features
@@ -146,7 +174,7 @@ curl -X POST http://localhost:8000/api/v1/tactical/analyze \
 **Tactical Analysis** - Analyze formations, playing style, strengths/weaknesses  
 **Match Recommendations** - Get tactical suggestions for each match  
 **Data Visualization** - Clear, actionable insights dashboard  
-**API Integration** - Real-time football data from API-Football  
+**Data Sources** - SofaScore scraping with optional local scraper export fallback  
 
 ---
 
@@ -183,10 +211,10 @@ netstat -tulpn | grep -E '3000|8000|5432|6379'
 docker-compose logs -f
 ```
 
-### API Key Issues
-- Verify key is correct in .env
-- Check API quota on RapidAPI dashboard
-- Ensure no extra spaces in .env file
+### SofaScore 403 (blocked)
+- Run `docker compose exec backend python scripts/sofascore_diagnose.py`
+- Use the Selenium scraper export fallback (`python3 scrapper/scrapper.py`)
+- Optionally set `SOFASCORE_ENABLED=False` to force offline fixtures mode
 
 ### Database Connection
 ```bash

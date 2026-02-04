@@ -16,11 +16,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
+from utils.logger import setup_logger
+
 from services.match_analysis_service import get_match_analysis_service
 from services.cache_service import get_cache_service
 from services.advanced_stats_analyzer import get_advanced_stats_analyzer
+from services.sofascore_service import get_sofascore_service
 
 router = APIRouter()
+logger = setup_logger(__name__)
 
 
 def _safe_div(n: float, d: float, default: float = 0.0) -> float:
@@ -202,7 +206,7 @@ def _aggregate_tactical(recent_analyzed):
         return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
 
     return {
-        "estimated": True,
+        "estimated": any(bool(m.get('estimated', True)) for m in recent_analyzed),
         "matches_analyzed": len(recent_analyzed),
         "possession_control": {
             "possession_percent_avg": _mean(possession),
@@ -369,7 +373,7 @@ def _aggregate_set_pieces(recent_analyzed):
         defensive_success_rating = _clamp(base, 0.0, 100.0)
 
     return {
-        'estimated': True,
+        'estimated': any(bool(m.get('estimated', True)) for m in recent_analyzed),
         'matches_analyzed': len(recent_analyzed),
         'attacking_set_pieces': {
             'corners_taken_avg': _mean(corners_taken),
@@ -430,7 +434,7 @@ def _aggregate_contextual(recent_analyzed):
     total_loc = sum(loc_dist.values())
 
     return {
-        'estimated': True,
+        'estimated': any(bool(m.get('estimated', True)) for m in recent_analyzed),
         'matches_analyzed': len(recent_analyzed),
         'scoreline_state_distribution': _dist(scoreline),
         'home_away_distribution': loc_dist,
@@ -588,7 +592,9 @@ async def get_opponent_statistics(
 
         # Tactical foundation stats (NEW)
         analyzer = get_advanced_stats_analyzer()
-        recent_games_tactical = analyzer.analyze_recent_games(recent_matches, opponent_name, limit=5)
+        recent_games_tactical = analysis.get("recent_games_tactical") or []
+        if not recent_games_tactical:
+            recent_games_tactical = analyzer.analyze_recent_games(recent_matches, opponent_name, limit=5)
         tactical_foundation = _aggregate_tactical(recent_games_tactical)
         set_piece_analytics = _aggregate_set_pieces(recent_games_tactical)
         contextual_psychological = _aggregate_contextual(recent_games_tactical)
@@ -614,8 +620,14 @@ async def get_opponent_statistics(
             "tactical_foundation": tactical_foundation,
             "set_piece_analytics": set_piece_analytics,
             "contextual_psychological": contextual_psychological,
-            "data_source": "api",
-            "cache_info": "Fresh data from API (cached for 24h)",
+            "data_source": full_analysis.get("data_source", "sofascore"),
+            "cache_info": (
+                "Fresh data from API (cached for 24h)"
+                if full_analysis.get("data_source") == "sofascore"
+                else "Fresh data from scraper export (cached for 24h)"
+                if full_analysis.get("data_source") == "scraper_export"
+                else "Fresh data (cached for 24h)"
+            ),
         }
 
         await cache.set("opponent_stats", cache_key, result)

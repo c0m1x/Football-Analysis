@@ -4,7 +4,6 @@ Configuration settings for the application
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import List
-import os
 
 
 class Settings(BaseSettings):
@@ -28,14 +27,23 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: str = ""
     CACHE_TTL: int = 3600  # 1 hour
     
-    # Football API Configuration
-    FOOTBALL_API_KEY: str = "ee524b1393msh0d80966992ba97ep11cf63jsn6686add35168"
-    FOOTBALL_API_BACKUP_KEY: str = "0783b704d5msh4c7f1c835680fccp1bdf77jsn28306145b1f3"
-    FOOTBALL_API_BASE_URL: str = "https://free-api-live-football-data.p.rapidapi.com"
-    FOOTBALL_API_RATE_LIMIT: int = 100  # requests per period
-    
+    # SofaScore Configuration
+    SOFASCORE_ENABLED: bool = True
+    SOFASCORE_BASE_URL: str = "https://www.sofascore.com/api/v1"
+    SOFASCORE_TIMEOUT_SECONDS: float = 20.0
+    SOFASCORE_USER_AGENT: str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    SOFASCORE_BASE_URLS: str = ""  # comma-separated fallbacks
+    SOFASCORE_HEADERS_JSON: str = ""  # optional extra headers for scraping
+    SOFASCORE_COOKIES_JSON: str = ""  # optional cookies for scraping
+    SOFASCORE_PROXY: str = ""  # optional http/https proxy URL
+    SOFASCORE_TEAM_ID_MAP_JSON: str = ""  # optional: {"Gil Vicente": 12345, "FC Porto": 67890}
+
+    # Local Scraper Export Fallback
+    # Directory where `scrapper/scrapper.py` writes JSON exports (repo root by default).
+    SCRAPER_EXPORT_DIR: str = ""
+
     # Gil Vicente Configuration
-    GIL_VICENTE_TEAM_ID: int = 9764  # Free API team ID
+    GIL_VICENTE_TEAM_ID: int = 9764  # SofaScore team ID
     GIL_VICENTE_LEAGUE_ID: int = 61  # Liga Portugal
     OPPONENT_MATCH_HISTORY_LIMIT: int = 10
     

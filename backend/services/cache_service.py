@@ -36,9 +36,9 @@ class CacheService:
                     decode_responses=True
                 )
                 await self.redis_client.ping()
-                logger.info("✅ Redis cache connection established")
+                logger.info("Redis cache connection established")
             except Exception as e:
-                logger.error(f"❌ Redis connection failed: {e}")
+                logger.error(f"Redis connection failed: {e}")
                 self.redis_client = None
     
     async def disconnect(self):
@@ -74,10 +74,10 @@ class CacheService:
             cached_data = await self.redis_client.get(cache_key)
             
             if cached_data:
-                logger.info(f"🎯 Cache HIT: {cache_key}")
+                logger.info(f"Cache HIT: {cache_key}")
                 return json.loads(cached_data)
             else:
-                logger.info(f"❌ Cache MISS: {cache_key}")
+                logger.info(f"Cache MISS: {cache_key}")
                 return None
                 
         except Exception as e:
@@ -124,7 +124,7 @@ class CacheService:
                 serialized_data
             )
             
-            logger.info(f"💾 Cached: {cache_key} (TTL: {ttl_seconds}s)")
+            logger.info(f"Cached: {cache_key} (TTL: {ttl_seconds}s)")
             return True
             
         except Exception as e:
@@ -144,7 +144,7 @@ class CacheService:
             deleted = await self.redis_client.delete(cache_key)
             
             if deleted:
-                logger.info(f"🗑️ Deleted cache: {cache_key}")
+                logger.info(f"Deleted cache: {cache_key}")
             
             return bool(deleted)
             
@@ -180,7 +180,7 @@ class CacheService:
             
             if keys:
                 deleted = await self.redis_client.delete(*keys)
-                logger.info(f"🗑️ Cleared {deleted} cache entries matching '{pattern}'")
+                logger.info(f"Cleared {deleted} cache entries matching '{pattern}'")
                 return deleted
             
             return 0

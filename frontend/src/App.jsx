@@ -3,10 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Opponents from './pages/Opponents'
-import TacticalAnalysis from './pages/TacticalAnalysis'
-import Fixtures from './pages/Fixtures'
+import NextOpponent from './pages/NextOpponent'
+import Calendar from './pages/Calendar'
 
 function App() {
   return (
@@ -18,10 +16,14 @@ function App() {
           <ProtectedRoute>
             <Layout>
               <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/fixtures" element={<Fixtures />} />
-                <Route path="/opponents" element={<Opponents />} />
-                <Route path="/opponents/:teamId/analysis" element={<TacticalAnalysis />} />
+                <Route path="/" element={<NextOpponent />} />
+                <Route path="/calendar" element={<Calendar />} />
+
+                {/* Backwards-compatible routes */}
+                <Route path="/fixtures" element={<Navigate to="/calendar" replace />} />
+
+                {/* Catch-all */}
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

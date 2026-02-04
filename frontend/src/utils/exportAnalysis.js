@@ -1,230 +1,188 @@
-export const exportFixtureAnalysis = (selectedMatch, statistics, tacticalPlan, format) => {
-  if (!selectedMatch || !statistics || !tacticalPlan) return
+const fmt = (value, digits = 2) => {
+  if (value === null || value === undefined || Number.isNaN(value)) return 'N/A'
+  if (typeof value === 'number') return value.toFixed(digits)
+  return String(value)
+}
+
+const fmtPct = (value, digits = 1) => {
+  if (value === null || value === undefined || Number.isNaN(value)) return 'N/A'
+  if (typeof value === 'number') return `${value.toFixed(digits)}%`
+  return String(value)
+}
+
+const safeBool = (v) => {
+  if (v === true || v === false) return v
+  if (typeof v === 'string') return v.toLowerCase() === 'true'
+  return Boolean(v)
+}
+
+const isGilHomeFromFixture = (fixture) => {
+  if (!fixture) return false
+  if (fixture.is_gil_home !== undefined) return safeBool(fixture.is_gil_home)
+  if (fixture.is_home !== undefined) return safeBool(fixture.is_home)
+  if (fixture.gil_vicente_home !== undefined) return safeBool(fixture.gil_vicente_home)
+  return false
+}
+
+const fixtureDateTime = (fixture) => {
+  if (!fixture) return null
+  if (fixture.datetime) return new Date(fixture.datetime)
+  if (fixture.date) return new Date(`${fixture.date}T${fixture.time || '00:00:00'}`)
+  return null
+}
+
+const safeArr = (v) => (Array.isArray(v) ? v : [])
+
+export const exportFixtureAnalysis = (fixture, statistics, tacticalPlan, format) => {
+  if (!fixture || !statistics || !tacticalPlan) return
+
+  const isHome = isGilHomeFromFixture(fixture)
+  const dt = fixtureDateTime(fixture)
+  const opponent = fixture.opponent_name || statistics.opponent || tacticalPlan.opponent || 'Opponent'
 
   const exportData = {
     match: {
-      opponent: selectedMatch.opponent_name,
-      date: selectedMatch.date,
-      venue: selectedMatch.is_gil_home ? 'Home' : 'Away',
-      competition: selectedMatch.competition
+      opponent,
+      date: fixture.date,
+      time: fixture.time,
+      datetime: fixture.datetime || (dt ? dt.toISOString() : null),
+      venue: isHome ? 'Home' : 'Away',
+      competition: fixture.competition || null,
     },
-    statistics: statistics,
-    tacticalPlan: tacticalPlan,
-    exportDate: new Date().toISOString()
+    statistics,
+    tacticalPlan,
+    exportDate: new Date().toISOString(),
   }
+
+  const baseName = `${opponent}`.replace(/\s+/g, '_')
+  const day = new Date().toISOString().split('T')[0]
 
   if (format === 'json') {
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${selectedMatch.opponent_name.replace(/\s+/g, '_')}_analysis_${new Date().toISOString().split('T')[0]}.json`
+    a.download = `${baseName}_analysis_${day}.json`
     a.click()
     URL.revokeObjectURL(url)
-  } else if (format === 'text') {
-    let txt = 'TACTICAL ANALYSIS REPORT\n'
-    txt += '='.repeat(50) + '\n\n'
-    txt += `Match: Gil Vicente FC vs ${selectedMatch.opponent_name}\n`
-    txt += `Date: ${new Date(selectedMatch.date).toLocaleDateString('pt-PT')}\n`
-    txt += `Venue: ${selectedMatch.is_gil_home ? 'Home (Estádio Cidade de Barcelos)' : 'Away'}\n`
-    txt += `Competition: ${selectedMatch.competition}\n\n`
-    
-    if (statistics) {
-      txt += 'OPPONENT STATISTICS\n' + '-'.repeat(50) + '\n'
-      txt += `Team: ${statistics.team_name}\n`
-      txt += `Formation: ${statistics.formation || 'N/A'}\n`
-      txt += `Style: ${statistics.playing_style || 'N/A'}\n\n`
-      
-      if (statistics.last_match) {
-        txt += 'Last Match Performance:\n'
-        txt += `  Result: ${statistics.last_match.result}\n`
-        txt += `  Score: ${statistics.last_match.score}\n`
-        txt += `  Goals: ${statistics.last_match.goals_scored}-${statistics.last_match.goals_conceded}\n`
-        txt += `  Possession: ${statistics.last_match.possession}%\n`
-        txt += `  Shots: ${statistics.last_match.shots} (${statistics.last_match.shots_on_target} on target)\n\n`
-      }
-      
-      if (statistics.strengths?.length > 0) {
-        txt += 'Strengths:\n'
-        statistics.strengths.forEach(s => txt += `  • ${s}\n`)
-        txt += '\n'
-      }
-      
-      if (statistics.weaknesses?.length > 0) {
-        txt += 'Weaknesses:\n'
-        statistics.weaknesses.forEach(w => txt += `  • ${w}\n`)
-        txt += '\n'
-      }
-    }
-    
-    if (tacticalPlan) {
-      txt += 'TACTICAL PLAN\n' + '-'.repeat(50) + '\n'
-      txt += `Recommended Formation: ${tacticalPlan.recommended_formation || 'N/A'}\n\n`
-      
-      if (tacticalPlan.key_recommendations?.length > 0) {
-        txt += 'Key Recommendations:\n'
-        tacticalPlan.key_recommendations.forEach((rec, i) => {
-          txt += `  ${i + 1}. ${rec}\n`
-        })
-        txt += '\n'
-      }
-      
-      if (tacticalPlan.defensive_approach) {
-        txt += `Defensive Approach:\n  ${tacticalPlan.defensive_approach}\n\n`
-      }
-      
-      if (tacticalPlan.attacking_approach) {
-        txt += `Attacking Approach:\n  ${tacticalPlan.attacking_approach}\n\n`
-      }
-      
-      if (tacticalPlan.set_pieces) {
-        txt += `Set Pieces:\n  ${tacticalPlan.set_pieces}\n\n`
-      }
-    }
-    
-    txt += '\n' + '-'.repeat(50) + '\n'
-    txt += `Report generated: ${new Date().toLocaleString('pt-PT')}\n`
-    txt += 'Gil Vicente FC Tactical Intelligence Platform\n'
-
-    const blob = new Blob([txt], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${selectedMatch.opponent_name.replace(/\s+/g, '_')}_analysis_${new Date().toISOString().split('T')[0]}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-}
-
-export const exportOpponentAnalysis = (opponentName, tacticalData, formData, advancedStats, format) => {
-  if (!opponentName) return
-
-  const exportData = {
-    opponent: opponentName,
-    tacticalProfile: tacticalData,
-    recentForm: formData,
-    advancedStatistics: advancedStats,
-    exportDate: new Date().toISOString()
+    return
   }
 
-  if (format === 'json') {
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${opponentName.replace(/\s+/g, '_')}_opponent_analysis_${new Date().toISOString().split('T')[0]}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  } else if (format === 'text') {
-    let txt = 'OPPONENT ANALYSIS REPORT\n'
-    txt += '='.repeat(50) + '\n\n'
-    txt += `Team: ${opponentName}\n`
-    txt += `Analysis Date: ${new Date().toLocaleDateString('pt-PT')}\n\n`
-    
-    if (tacticalData) {
-      txt += 'TACTICAL PROFILE\n' + '-'.repeat(50) + '\n'
-      txt += `Formation: ${tacticalData.formation || 'N/A'}\n`
-      txt += `Playing Style: ${tacticalData.playing_style || 'N/A'}\n`
-      txt += `Possession: ${tacticalData.avg_possession || 'N/A'}%\n`
-      txt += `Goals per Game: ${tacticalData.avg_goals || 'N/A'}\n\n`
-      
-      if (tacticalData.strengths?.length > 0) {
-        txt += 'Strengths:\n'
-        tacticalData.strengths.forEach(s => txt += `  • ${s}\n`)
-        txt += '\n'
-      }
-      
-      if (tacticalData.weaknesses?.length > 0) {
-        txt += 'Weaknesses:\n'
-        tacticalData.weaknesses.forEach(w => txt += `  • ${w}\n`)
-        txt += '\n'
-      }
-    }
-    
-    if (formData?.recent_matches?.length > 0) {
-      txt += 'RECENT FORM\n' + '-'.repeat(50) + '\n'
-      formData.recent_matches.forEach((match, i) => {
-        txt += `Match ${i + 1}: ${match.result} (${match.goals_scored}-${match.goals_conceded})\n`
-      })
-      txt += '\n'
-    }
-    
-    if (advancedStats) {
-      txt += 'ADVANCED STATISTICS\n' + '-'.repeat(50) + '\n'
-      txt += JSON.stringify(advancedStats, null, 2) + '\n\n'
-    }
-    
-    txt += '\n' + '-'.repeat(50) + '\n'
-    txt += `Report generated: ${new Date().toLocaleString('pt-PT')}\n`
-    txt += 'Gil Vicente FC Tactical Intelligence Platform\n'
+  if (format !== 'text') return
 
-    const blob = new Blob([txt], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${opponentName.replace(/\s+/g, '_')}_opponent_analysis_${new Date().toISOString().split('T')[0]}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-}
+  const tactical = tacticalPlan?.tactical_plan || {}
+  const formationRaw = tactical?.formation_recommendations?.suggested_changes
+  const formationRecs = Array.isArray(formationRaw) ? formationRaw : (formationRaw?.recommendations ?? [])
 
-export const exportToJSON = (data, filename) => {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${filename}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
+  const pressingRec = tactical?.pressing_strategy?.recommendation || {}
+  const pressingRecs = safeArr(pressingRec?.pressing_recommendations)
 
-export const exportToText = (data, filename) => {
-  let txt = 'TACTICAL ANALYSIS REPORT\n'
+  const zonesRaw = tactical?.target_zones?.priority_zones
+  const zones = Array.isArray(zonesRaw) ? zonesRaw : (zonesRaw?.priority_zones ?? [])
+
+  const weaknesses = safeArr(tactical?.critical_weaknesses)
+
+  const f = statistics?.tactical_foundation || {}
+  const pc = f?.possession_control || {}
+  const sf = f?.shooting_finishing || {}
+  const xm = f?.expected_metrics || {}
+  const ps = f?.pressing_structure || {}
+
+  let txt = ''
+  txt += 'GIL VICENTE FC — TACTICAL ANALYSIS REPORT\n'
   txt += '='.repeat(60) + '\n\n'
-  txt += `Opponent: ${data.opponent}\n`
-  txt += `Generated: ${new Date().toLocaleString('pt-PT')}\n\n`
-  
-  if (data.statistics) {
-    txt += 'STATISTICS\n' + '-'.repeat(60) + '\n'
-    txt += JSON.stringify(data.statistics, null, 2) + '\n\n'
+  txt += `Match: Gil Vicente vs ${opponent}\n`
+  if (dt && !Number.isNaN(dt.getTime())) {
+    txt += `Date: ${dt.toLocaleString('pt-PT')}\n`
+  } else if (fixture.date) {
+    txt += `Date: ${fixture.date} ${fixture.time || ''}\n`
   }
-  
-  if (data.tacticalPlan) {
-    txt += 'TACTICAL PLAN\n' + '-'.repeat(60) + '\n'
-    if (data.tacticalPlan.recommended_formation) {
-      txt += `Recommended Formation: ${data.tacticalPlan.recommended_formation}\n\n`
-    }
-    if (data.tacticalPlan.key_recommendations) {
-      txt += 'Key Recommendations:\n'
-      data.tacticalPlan.key_recommendations.forEach((rec, i) => {
-        txt += `  ${i + 1}. ${rec}\n`
-      })
-      txt += '\n'
-    }
-    if (data.tacticalPlan.defensive_approach) {
-      txt += `Defensive Approach:\n  ${data.tacticalPlan.defensive_approach}\n\n`
-    }
-    if (data.tacticalPlan.attacking_approach) {
-      txt += `Attacking Approach:\n  ${data.tacticalPlan.attacking_approach}\n\n`
-    }
+  txt += `Venue: ${isHome ? 'Home (Estádio Cidade de Barcelos)' : 'Away'}\n`
+  if (fixture.competition) txt += `Competition: ${fixture.competition}\n`
+  txt += '\n'
+
+  txt += 'DATA SOURCES\n'
+  txt += '-'.repeat(60) + '\n'
+  txt += `Statistics: ${statistics?.data_source || 'N/A'}\n`
+  txt += `Tactical Plan: ${tacticalPlan?.data_source || 'N/A'}\n`
+  if (statistics?.cache_info) txt += `Stats cache: ${statistics.cache_info}\n`
+  if (tacticalPlan?.cache_info) txt += `Plan cache: ${tacticalPlan.cache_info}\n`
+  txt += '\n'
+
+  txt += 'OPPONENT OVERVIEW (RECENT FORM)\n'
+  txt += '-'.repeat(60) + '\n'
+  txt += `Form: ${statistics?.overall_performance?.form_string || 'N/A'}\n`
+  txt += `Goals/Game: ${statistics?.overall_performance?.goals_per_game ?? 'N/A'}\n`
+  txt += `Conceded/Game: ${statistics?.overall_performance?.conceded_per_game ?? 'N/A'}\n`
+  txt += `Points/Game: ${statistics?.overall_performance?.points_per_game ?? 'N/A'}\n`
+  txt += '\n'
+
+  txt += 'TACTICAL FOUNDATION (AVERAGES)\n'
+  txt += '-'.repeat(60) + '\n'
+  txt += `Matches analyzed: ${f?.matches_analyzed ?? 'N/A'}${f?.estimated ? ' (estimated)' : ''}\n`
+  txt += `Possession: ${fmtPct(pc?.possession_percent_avg)}\n`
+  txt += `Pass accuracy: ${fmtPct(pc?.pass_accuracy_avg)}\n`
+  txt += `Shots: ${fmt(sf?.total_shots_avg, 1)} (on target ${fmt(sf?.shots_on_target_avg, 1)})\n`
+  txt += `xG: ${fmt(xm?.xG_avg, 2)} (xG/shot ${fmt(xm?.xG_per_shot_avg, 3)})\n`
+  txt += `PPDA: ${fmt(ps?.PPDA_avg, 1)}\n`
+  txt += '\n'
+
+  txt += 'AI TACTICAL PLAN\n'
+  txt += '-'.repeat(60) + '\n'
+  if (tacticalPlan?.ai_confidence) {
+    txt += `Confidence: ${tacticalPlan.ai_confidence.overall_confidence ?? 'N/A'}%\n`
+    if (tacticalPlan.ai_confidence.data_quality) txt += `Data quality: ${tacticalPlan.ai_confidence.data_quality}\n`
+    if (tacticalPlan.ai_confidence.recommendation_reliability) txt += `Reliability: ${tacticalPlan.ai_confidence.recommendation_reliability}\n`
   }
-  
-  if (data.recentMatches && data.recentMatches.length > 0) {
-    txt += 'RECENT MATCHES\n' + '-'.repeat(60) + '\n'
-    data.recentMatches.forEach((match, i) => {
-      txt += `Match ${i + 1}: ${match.result || 'N/A'} - ${match.score || 'N/A'}\n`
+  txt += '\n'
+
+  if (formationRecs.length > 0) {
+    txt += 'Formation recommendations:\n'
+    formationRecs.slice(0, 5).forEach((r, i) => {
+      txt += `  ${i + 1}. ${r.formation || '—'}${r.priority ? ` (${r.priority})` : ''}\n`
+      if (r.reason) txt += `     - ${r.reason}\n`
     })
     txt += '\n'
   }
-  
-  txt += '\n' + '='.repeat(60) + '\n'
-  txt += 'Gil Vicente FC - Tactical Intelligence Platform\n'
+
+  if (pressingRecs.length > 0) {
+    txt += 'Pressing adjustments:\n'
+    pressingRecs.slice(0, 6).forEach((r, i) => {
+      txt += `  ${i + 1}. ${r.adjustment || '—'} · ${r.target_line || '—'}${r.priority ? ` (${r.priority})` : ''}\n`
+      if (r.reason) txt += `     - ${r.reason}\n`
+    })
+    txt += '\n'
+  }
+
+  if (zones.length > 0) {
+    txt += 'Priority attack zones:\n'
+    zones.slice(0, 6).forEach((z, i) => {
+      txt += `  ${i + 1}. ${z.zone || '—'}${z.priority ? ` (${z.priority})` : ''}\n`
+      const why = z.reasoning || z.attack_method || z.expected_outcome
+      if (why) txt += `     - ${why}\n`
+    })
+    txt += '\n'
+  }
+
+  if (weaknesses.length > 0) {
+    txt += 'Weaknesses to exploit:\n'
+    weaknesses.slice(0, 6).forEach((w, i) => {
+      txt += `  ${i + 1}. ${w.weakness || '—'}${w.severity ? ` (${w.severity})` : ''}\n`
+      const how = w.tactical_approach || w.exploitation || w.expected_impact
+      if (how) txt += `     - ${how}\n`
+    })
+    txt += '\n'
+  }
+
+  txt += '='.repeat(60) + '\n'
+  txt += `Report generated: ${new Date().toLocaleString('pt-PT')}\n`
 
   const blob = new Blob([txt], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${filename}.txt`
+  a.download = `${baseName}_analysis_${day}.txt`
   a.click()
   URL.revokeObjectURL(url)
 }
+

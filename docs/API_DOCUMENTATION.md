@@ -12,6 +12,27 @@ Base URL: `http://localhost:8000/api/v1`
 
 ---
 
+## Data Source (SofaScore)
+
+- All fixtures/opponents/stats are sourced via **SofaScore scraping** (unofficial endpoints).
+- If you see `503 Service Unavailable` with a message like "SofaScore denied this request (HTTP 403)", this deployment environment is likely blocked by SofaScore.
+
+**Scraper env vars** (see `.env`):
+- `SOFASCORE_BASE_URL` / `SOFASCORE_BASE_URLS`
+- `SOFASCORE_TIMEOUT_SECONDS` / `SOFASCORE_USER_AGENT`
+
+**Diagnose inside Docker**:
+```bash
+docker compose exec backend python scripts/sofascore_diagnose.py
+```
+
+**Optional live test** (fails if blocked):
+```bash
+docker compose exec -e RUN_LIVE_SOFASCORE_TESTS=1 backend python -m unittest -v tests/test_sofascore_live.py
+```
+
+---
+
 ## Authentication
 
 Currently, the API does not require authentication for development purposes. Production deployment should implement API key authentication.
@@ -162,6 +183,44 @@ Get head-to-head history
   "opponent_id": 123,
   "matches": [...],
   "count": 5
+}
+```
+
+---
+
+### Opponent Deep Stats (Scouting)
+
+#### GET /opponent-stats/{opponent_id}
+Returns deep tactical aggregates used by the frontend's Advanced Stats Panel.
+
+**Path Parameters:**
+- `opponent_id`: Opponent team ID (from the existing fixtures feed)
+
+**Query Parameters:**
+- `opponent_name` (required): Opponent team name
+
+**Data sources:**
+- Tactical stats prefer SofaScore when enabled and available.
+- Falls back to heuristic estimation when SofaScore is unavailable.
+- If team search is blocked (403), set `SOFASCORE_TEAM_ID_MAP_JSON` in `.env` to map names to SofaScore team IDs.
+
+**Response (shape):**
+```json
+{
+  "opponent": "Team Name",
+  "opponent_id": "123",
+  "tactical_foundation": {
+    "estimated": false,
+    "matches_analyzed": 5
+  },
+  "recent_games_tactical": [
+    {
+      "estimated": false,
+      "possession_control": {
+        "possession_percent": 55.0
+      }
+    }
+  ]
 }
 ```
 
@@ -319,10 +378,7 @@ All endpoints follow consistent error response format:
 
 ## Rate Limiting
 
-External API calls are rate-limited based on the Football API subscription:
-- Default: 100 requests/day
-
-Consider implementing caching strategies for production use.
+SofaScore scraping should be treated as a best-effort source. Use caching and avoid high-frequency requests in production.
 
 ---
 

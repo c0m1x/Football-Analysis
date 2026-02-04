@@ -14,7 +14,7 @@ A comprehensive software system that integrates with football data APIs to analy
 
 This project mixes **real fixture data** with **derived/estimated tactical metrics**.
 
-- **Real data**: fixtures/results are fetched from external providers (e.g. SofaScore scraper and/or API-Football, depending on the route/service).
+- **Real data**: fixtures/results are fetched from SofaScore scraping and local scraper exports.
 - **Estimated/heuristic data**: many advanced metrics (e.g. xG/xA/PPDA proxies, pressing/shape proxies) are computed because the upstream sources used here do **not** provide full event-level tracking.
 - **How to detect it**: several API responses include an `estimated: true` flag and/or a note like "Estimated proxy (no event data)".
 - **Unavailable fields**: event/positional outputs such as zone heatmaps, touches-per-zone, overloads, and minute-by-minute timelines are returned as `null` unless you integrate an event feed or video tracking.
@@ -100,7 +100,6 @@ The platform is currently deployed and accessible online.
 - Docker & Docker Compose
 - Python 3.11+ (for local development)
 - Node.js 18+ (for frontend development)
-- Football API Key (API-Football via RapidAPI)
 
 ### Quick Start with Docker
 
@@ -112,7 +111,7 @@ cd "Football Analysis"
 2. **Configure environment variables**
 ```bash
 cp .env.example .env
-# Edit .env and add your API keys
+# Edit .env
 ```
 
 3. **Start the services**
@@ -268,10 +267,10 @@ curl -X POST http://localhost:8000/api/v1/tactical/match-brief \
 Key configuration options in `.env`:
 
 ```env
-# Football API
-FOOTBALL_API_KEY=your_key_here
-GIL_VICENTE_TEAM_ID=228
-GIL_VICENTE_LEAGUE_ID=94
+# SofaScore
+SOFASCORE_ENABLED=True
+GIL_VICENTE_TEAM_ID=9764
+GIL_VICENTE_LEAGUE_ID=61
 
 # Database
 DATABASE_URL=postgresql://user:pass@localhost:5432/gil_vicente_tactical
@@ -327,9 +326,9 @@ This is a professional project for Gil Vicente FC. For contributions:
 
 Proprietary - Gil Vicente FC
 
-## API Provider
+## Data Source
 
-This project uses [API-Football](https://www.api-football.com/) via RapidAPI for football data.
+This project uses SofaScore scraping with an optional local scraper export fallback.
 
 ## Support
 

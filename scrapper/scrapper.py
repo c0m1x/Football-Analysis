@@ -627,6 +627,15 @@ class SofaScoreScraper:
                     if stats:
                         match_data.update(stats)
 
+                    # Fill missing score/date info from event API
+                    event_summary = self.stats_extractor.extract_event_summary(match_url)
+                    if event_summary:
+                        for key, value in event_summary.items():
+                            if value is None:
+                                continue
+                            if key not in match_data or match_data.get(key) in (None, "", "TBD"):
+                                match_data[key] = value
+
                     all_matches.append(match_data)
 
                 except Exception as e:

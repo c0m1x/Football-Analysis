@@ -421,18 +421,31 @@ class ScraperExportService:
     def _default_export_dir(self) -> str:
         # Default to a dedicated data folder if present, otherwise repo root.
         here = os.path.dirname(os.path.abspath(__file__))
-        repo_root = os.path.abspath(os.path.join(here, "..", ".."))
-        preferred = os.path.join(repo_root, "data", "scraper_exports")
-        return preferred if os.path.isdir(preferred) else repo_root
+        backend_root = os.path.abspath(os.path.join(here, ".."))
+        repo_root = os.path.abspath(os.path.join(backend_root, ".."))
+
+        candidates = [
+            os.path.join(backend_root, "data", "scraper_exports"),
+            os.path.join(repo_root, "data", "scraper_exports"),
+        ]
+        for path in candidates:
+            if os.path.isdir(path):
+                return path
+
+        # Fallback to backend root (useful in containerized runs).
+        return backend_root
 
     def _candidate_paths(self, opponent_name: str) -> List[str]:
         if self.export_dir:
             base_dirs = [self.export_dir]
         else:
             here = os.path.dirname(os.path.abspath(__file__))
-            repo_root = os.path.abspath(os.path.join(here, "..", ".."))
+            backend_root = os.path.abspath(os.path.join(here, ".."))
+            repo_root = os.path.abspath(os.path.join(backend_root, ".."))
             base_dirs = [
+                os.path.join(backend_root, "data", "scraper_exports"),
                 os.path.join(repo_root, "data", "scraper_exports"),
+                backend_root,  # backwards-compat: older exports were written to backend root
                 repo_root,  # backwards-compat: older exports were written to repo root
             ]
 

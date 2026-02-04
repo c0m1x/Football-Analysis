@@ -592,7 +592,7 @@ async def get_opponent_statistics(
 
         # Tactical foundation stats (NEW)
         analyzer = get_advanced_stats_analyzer()
-        recent_games_tactical = analysis.get("recent_games_tactical") or []
+        recent_games_tactical = full_analysis.get("recent_games_tactical") or []
         if not recent_games_tactical:
             recent_games_tactical = analyzer.analyze_recent_games(recent_matches, opponent_name, limit=5)
         tactical_foundation = _aggregate_tactical(recent_games_tactical)

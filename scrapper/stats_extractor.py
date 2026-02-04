@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+from datetime import datetime, timezone
 import base64
 import urllib.error
 import urllib.request
@@ -491,6 +492,63 @@ class MatchStatsExtractor:
                     return stats
 
         return {}
+
+    def extract_event_summary(self, match_url: Optional[str]) -> Dict[str, object]:
+        """Best-effort fetch of match metadata (scores/date/status)."""
+        if not match_url:
+            return {}
+
+        event_id = self._extract_event_id(match_url)
+        if not event_id:
+            return {}
+
+        base_urls = [
+            self.api_base_url.rstrip("/"),
+            "https://www.sofascore.com/api/v1",
+        ]
+        urls = [f"{base}/event/{event_id}" for base in base_urls]
+
+        for url in urls:
+            data = self._fetch_json_via_browser(url) or self._fetch_json(url)
+            if not isinstance(data, dict):
+                continue
+            event = data.get("event") if isinstance(data.get("event"), dict) else None
+            if not event and isinstance(data.get("homeTeam"), dict):
+                event = data
+            if event:
+                return self._flatten_event_summary(event)
+
+        return {}
+
+    def _flatten_event_summary(self, event: Dict) -> Dict[str, object]:
+        out: Dict[str, object] = {}
+
+        home_score = (event.get("homeScore") or {}).get("current")
+        away_score = (event.get("awayScore") or {}).get("current")
+        if home_score is not None:
+            out["home_score"] = str(home_score)
+        if away_score is not None:
+            out["away_score"] = str(away_score)
+
+        status_type = str((event.get("status") or {}).get("type") or "").lower()
+        if status_type:
+            out["status"] = "finished" if status_type == "finished" else "upcoming"
+
+        start_ts = event.get("startTimestamp")
+        if isinstance(start_ts, (int, float)):
+            dt = datetime.fromtimestamp(float(start_ts), tz=timezone.utc)
+            out["utc_time"] = dt.isoformat()
+            out["date"] = dt.date().isoformat()
+            out["time"] = dt.time().replace(microsecond=0).isoformat()
+
+        home_team = (event.get("homeTeam") or {}).get("name")
+        away_team = (event.get("awayTeam") or {}).get("name")
+        if home_team:
+            out["home_team"] = home_team
+        if away_team:
+            out["away_team"] = away_team
+
+        return out
 
     def _cookie_header(self) -> str:
         try:

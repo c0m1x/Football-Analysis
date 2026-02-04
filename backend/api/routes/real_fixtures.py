@@ -304,14 +304,30 @@ async def get_all_fixtures():
     gil_team_id = int(getattr(settings, "GIL_VICENTE_TEAM_ID", 9764) or 9764)
 
     def _build_manual_fixtures():
+        manual_env = (os.getenv("MANUAL_FIXTURES_PATH") or "").strip()
+        candidates = []
+        if manual_env:
+            candidates.append(os.path.expanduser(manual_env))
+
         here = os.path.dirname(os.path.abspath(__file__))
-        repo_root = os.path.abspath(os.path.join(here, "..", "..", ".."))
-        manual_path = os.path.join(repo_root, "data", "manual_fixtures.json")
-        if not os.path.isfile(manual_path):
+        backend_root = os.path.abspath(os.path.join(here, "..", ".."))
+        repo_root = os.path.abspath(os.path.join(backend_root, ".."))
+
+        candidates.append(os.path.join(backend_root, "data", "manual_fixtures.json"))
+        candidates.append(os.path.join(repo_root, "data", "manual_fixtures.json"))
+
+        manual_path = None
+        for path in candidates:
+            if path and os.path.isfile(path):
+                manual_path = path
+                break
+
+        if not manual_path:
             return None
 
         try:
-            raw = json.loads(open(manual_path, "r", encoding="utf-8").read())
+            with open(manual_path, "r", encoding="utf-8") as fh:
+                raw = json.loads(fh.read())
         except Exception:
             return None
 

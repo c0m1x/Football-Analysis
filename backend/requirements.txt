@@ -4,20 +4,18 @@ uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# Database
-psycopg2-binary==2.9.9
-sqlalchemy==2.0.23
-alembic==1.13.0
+# Cache
 redis==5.0.1
 
 # HTTP & API
 httpx==0.25.2
-requests==2.31.0
 python-dotenv==1.0.0
 
 # Data Processing
 pandas==2.1.4
 numpy==1.26.2
+soccerdata==1.8.7
+lxml>=4.9.3,<5.0.0
 
 # Testing
 pytest==7.4.3
@@ -25,16 +23,4 @@ pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 
 # Utilities
-python-dateutil==2.8.2
-pytz==2023.3
-tenacity==8.2.3
-
-# Monitoring & Logging
-prometheus-client==0.19.0
 python-json-logger==2.0.7
-
-# Web Scraping for Real Football Data
-soccerdata==1.8.7
-lxml>=4.9.3,<5.0.0
-beautifulsoup4==4.12.3
-selenium==4.16.0

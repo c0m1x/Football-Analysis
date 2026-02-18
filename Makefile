@@ -1,28 +1,23 @@
 SHELL := /bin/bash
 
 COMPOSE ?= docker compose
-SCRAPER ?= python3 scrapper/scrapper.py
-SCRAPER_EXPORT_DIR ?= data/scraper_exports
-STAMP_DIR ?= data
-TEAM ?=
 
-.PHONY: help scrape run
+.PHONY: help run up down logs
 
 help:
 	@echo "Targets:"
-	@echo "  make scrape           Run scraper and create a session stamp"
-	@echo "  make run TEAM=<name>  Run stack only if scraping was done for that team"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make scrape"
-	@echo "  make run TEAM=\"Moreirense\""
+	@echo "  make up      Build and start stack"
+	@echo "  make down    Stop stack"
+	@echo "  make logs    Follow backend logs"
+	@echo "  make run     Alias for up"
 
-scrape:
-	@echo "Running scraper..."
-	@$(SCRAPER)
-	@python3 create_stamp.py
-
-run:
-	@python3 check_stamp.py
-	@echo "Starting services..."
+up:
 	@$(COMPOSE) up --build
+
+run: up
+
+down:
+	@$(COMPOSE) down
+
+logs:
+	@$(COMPOSE) logs -f backend

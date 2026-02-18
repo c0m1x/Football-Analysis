@@ -15,6 +15,11 @@ const TacticalPlanPanel = ({ tacticalPlan }) => {
 
   const titleOpponent = tacticalPlan?.opponent || 'Opponent'
   const confidence = pct(tacticalPlan?.ai_confidence?.overall_confidence || tacticalPlan?.ai_confidence?.score)
+  const adjustedConfidence = pct(tacticalPlan?.confidence_adjustment?.adjusted_confidence)
+  const confidenceReliability = tacticalPlan?.confidence_adjustment?.recommendation_reliability
+  const baselineSeason = tacticalPlan?.historical_context?.baseline_season
+  const validationNote = tacticalPlan?.historical_context?.validation_note
+  const seasonComparison = tacticalPlan?.historical_context?.season_comparison || {}
 
   // Tactical plan shape adapters (backend may return nested objects)
   const formationChangesRaw = tacticalPlan?.tactical_plan?.formation_recommendations?.suggested_changes
@@ -47,6 +52,13 @@ const TacticalPlanPanel = ({ tacticalPlan }) => {
 
   const dataSource = tacticalPlan?.data_source
   const cacheInfo = tacticalPlan?.cache_info
+  const custom = tacticalPlan?.customized_suggestions || {}
+  const customSystem = safeArr(custom?.recommended_system)
+  const customAttackZones = safeArr(custom?.attack_zones)
+  const customVulnerabilities = safeArr(custom?.defensive_vulnerabilities)
+  const customNeutralize = safeArr(custom?.neutralize_strengths)
+  const customSetPieces = safeArr(custom?.set_piece_adjustments)
+  const llmNarrative = tacticalPlan?.language_generation?.narrative
 
   return (
     <div className="space-y-6">
@@ -59,11 +71,17 @@ const TacticalPlanPanel = ({ tacticalPlan }) => {
               <p className="text-lg font-bold">
                 Confiança: {confidence !== null ? `${confidence}%` : 'N/A'}
               </p>
+              {adjustedConfidence !== null && (
+                <p className="text-sm opacity-95">
+                  Confiança ajustada: {adjustedConfidence}% {confidenceReliability ? `(${confidenceReliability})` : ''}
+                </p>
+              )}
             </div>
           </div>
           <div className="text-right text-sm opacity-90">
             {tacticalPlan?.ai_confidence?.data_quality && <p>{tacticalPlan.ai_confidence.data_quality}</p>}
             {tacticalPlan?.ai_confidence?.recommendation_reliability && <p>Fiabilidade: {tacticalPlan.ai_confidence.recommendation_reliability}</p>}
+            {baselineSeason && <p>Base histórica: {baselineSeason}</p>}
             {(dataSource || cacheInfo) && (
               <p className="mt-1">
                 <span className="font-semibold">Fonte:</span> {dataSource || 'N/A'}
@@ -73,6 +91,109 @@ const TacticalPlanPanel = ({ tacticalPlan }) => {
           </div>
         </div>
       </div>
+
+      {(customSystem.length > 0 ||
+        customAttackZones.length > 0 ||
+        customVulnerabilities.length > 0 ||
+        customNeutralize.length > 0 ||
+        customSetPieces.length > 0) && (
+        <div className="bg-white rounded-lg p-6 border shadow-sm space-y-5">
+          <h4 className="text-xl font-bold text-gray-900">Sugestões táticas personalizadas</h4>
+
+          {customSystem.length > 0 && (
+            <div>
+              <p className="font-semibold text-gray-900 mb-2">Sistema de jogo recomendado</p>
+              <div className="space-y-2">
+                {customSystem.map((item, idx) => (
+                  <div key={idx} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="font-bold text-blue-900">{item.title || '—'}</p>
+                    <p className="text-gray-700 mt-1">{item.detail || ''}</p>
+                    {item.note && <p className="text-xs text-blue-800 mt-2">{item.note}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {customAttackZones.length > 0 && (
+            <div>
+              <p className="font-semibold text-gray-900 mb-2">Zonas a explorar no ataque</p>
+              <div className="space-y-2">
+                {customAttackZones.map((item, idx) => (
+                  <div key={idx} className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="font-bold text-green-900">{item.title || '—'}</p>
+                    <p className="text-gray-700 mt-1">{item.detail || ''}</p>
+                    {item.note && <p className="text-xs text-green-800 mt-2">{item.note}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {customVulnerabilities.length > 0 && (
+            <div>
+              <p className="font-semibold text-gray-900 mb-2">Vulnerabilidades defensivas identificadas</p>
+              <div className="space-y-2">
+                {customVulnerabilities.map((item, idx) => (
+                  <div key={idx} className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="font-bold text-red-900">{item.title || '—'}</p>
+                    <p className="text-gray-700 mt-1">{item.detail || ''}</p>
+                    {item.note && <p className="text-xs text-red-800 mt-2">{item.note}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {customNeutralize.length > 0 && (
+            <div>
+              <p className="font-semibold text-gray-900 mb-2">Como neutralizar os pontos fortes</p>
+              <div className="space-y-2">
+                {customNeutralize.map((item, idx) => (
+                  <div key={idx} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p className="font-bold text-amber-900">{item.title || '—'}</p>
+                    <p className="text-gray-700 mt-1">{item.detail || ''}</p>
+                    {item.note && <p className="text-xs text-amber-800 mt-2">{item.note}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {customSetPieces.length > 0 && (
+            <div>
+              <p className="font-semibold text-gray-900 mb-2">Ajustes em bolas paradas</p>
+              <div className="space-y-2">
+                {customSetPieces.map((item, idx) => (
+                  <div key={idx} className="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+                    <p className="font-bold text-indigo-900">{item.title || '—'}</p>
+                    <p className="text-gray-700 mt-1">{item.detail || ''}</p>
+                    {item.note && <p className="text-xs text-indigo-800 mt-2">{item.note}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(seasonComparison?.current_observed_profile || validationNote) && (
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700">
+              {validationNote && <p>{validationNote}</p>}
+              {seasonComparison?.current_observed_profile?.sample_size && (
+                <p className="mt-1">
+                  Observações atuais: {seasonComparison.current_observed_profile.sample_size}
+                </p>
+              )}
+            </div>
+          )}
+
+          {llmNarrative?.summary && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <p className="font-semibold text-purple-900">Resumo textual</p>
+              <p className="text-gray-700 mt-1">{llmNarrative.summary}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {formationChanges.length > 0 && (
         <div className="bg-blue-50 rounded-lg p-6 border-2 border-blue-200">
@@ -286,4 +407,3 @@ const TacticalPlanPanel = ({ tacticalPlan }) => {
 }
 
 export default TacticalPlanPanel
-

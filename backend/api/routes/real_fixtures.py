@@ -1,13 +1,12 @@
-"""
-Fixtures API backed solely by SofaScore scraping (no paid API fallbacks).
-"""
+"""Fixtures API backed by WhoScored (via soccerdata)."""
+
+from __future__ import annotations
+
 from datetime import datetime, timezone
 import json
 import os
 from typing import Optional
 from zoneinfo import ZoneInfo
-
-import httpx
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -15,16 +14,21 @@ from config.settings import get_settings
 from services.cache_service import get_cache_service
 from services.match_analysis_service import get_match_analysis_service
 from services.advanced_stats_analyzer import get_advanced_stats_analyzer
-from services.scraper_export_service import get_scraper_export_service
-from services.sofascore_service import get_sofascore_service
+from services.whoscored_service import get_whoscored_service
 from utils.logger import setup_logger
 
 router = APIRouter()
 logger = setup_logger(__name__)
 settings = get_settings()
 
-_GIL_TEAM_IDS = {str(getattr(settings, "GIL_VICENTE_TEAM_ID", 9764) or 9764), "9764"}
 LISBON_TZ = ZoneInfo("Europe/Lisbon")
+
+
+def _to_int(v) -> Optional[int]:
+    try:
+        return int(v)
+    except Exception:
+        return None
 
 
 def _utc_to_lisbon(utc_iso: str) -> tuple[str, str, str]:
@@ -82,7 +86,7 @@ def _normalize_fixture(f: dict) -> dict:
     return f
 
 
-def _fixture_from_sofascore(event: dict, gil_team_id: int) -> dict | None:
+def _fixture_from_event(event: dict, gil_team_id: int) -> dict | None:
     if not isinstance(event, dict):
         return None
 
@@ -299,9 +303,8 @@ def _build_tactical_profile(recent_analyzed: list[dict], form_summary: dict) -> 
 async def get_all_fixtures():
     cache = get_cache_service()
 
-    sofa = get_sofascore_service()
-    scraper_exports = get_scraper_export_service()
-    gil_team_id = int(getattr(settings, "GIL_VICENTE_TEAM_ID", 9764) or 9764)
+    ws = get_whoscored_service()
+    gil_name = str(getattr(settings, "GIL_VICENTE_TEAM_NAME", "Gil Vicente") or "Gil Vicente")
 
     def _build_manual_fixtures():
         manual_env = (os.getenv("MANUAL_FIXTURES_PATH") or "").strip()
@@ -368,34 +371,12 @@ async def get_all_fixtures():
             "cache_info": "Fixtures from manual configuration (cached for 1h)",
         }
 
-    def _build_scraper_fixtures():
-        fixtures = scraper_exports.load_fixtures(limit=120)
-        if not fixtures:
-            return None
-
-        fixtures = [_normalize_fixture(f) if isinstance(f, dict) else f for f in fixtures]
-        fixtures.sort(key=lambda x: (x.get("date") or "", x.get("time") or ""))
-
-        now = datetime.now().strftime("%Y-%m-%d")
-        past_fixtures = [f for f in fixtures if f.get("date", "") < now or f.get("status") == "finished"]
-        upcoming_fixtures = [f for f in fixtures if f.get("date", "") >= now and f.get("status") != "finished"]
-
-        return {
-            "total_fixtures": len(fixtures),
-            "past_fixtures": len(past_fixtures),
-            "upcoming_fixtures": len(upcoming_fixtures),
-            "fixtures": fixtures,
-            "data_source": "scraper_export",
-            "cache_info": "Fixtures from scraper export (cached for 1h)",
-        }
-
     manual_result = _build_manual_fixtures()
     if manual_result:
         await cache.set("fixtures", "all_gil_vicente", manual_result, ttl=3600)
         return manual_result
 
     cached_data = await cache.get("fixtures", "all_gil_vicente")
-
     if cached_data:
         fixtures = cached_data.get("fixtures") or []
         if isinstance(fixtures, list):
@@ -404,22 +385,17 @@ async def get_all_fixtures():
         cached_data["cache_info"] = cached_data.get("cache_info") or "Fixtures from cache"
         return cached_data
 
-    if not getattr(settings, "SOFASCORE_ENABLED", True):
-        scraper_result = _build_scraper_fixtures()
-        if scraper_result:
-            await cache.set("fixtures", "all_gil_vicente", scraper_result, ttl=3600)
-            return scraper_result
-
     try:
-        events = await sofa.get_team_events(gil_team_id, past_limit=60, upcoming_limit=20)
-        if not events:
-            scraper_result = _build_scraper_fixtures()
-            if scraper_result:
-                await cache.set("fixtures", "all_gil_vicente", scraper_result, ttl=3600)
-                return scraper_result
+        gil_id = ws.resolve_team_id(gil_name)
+        if gil_id is None:
+            gil_id = _to_int(getattr(settings, "GIL_VICENTE_TEAM_ID", None))
+        if gil_id is None:
+            raise RuntimeError("Unable to resolve Gil Vicente in WhoScored schedule")
+
+        events = ws.get_team_events(int(gil_id), past_limit=60, upcoming_limit=20, team_name=gil_name)
         fixtures = []
         for ev in events:
-            f = _fixture_from_sofascore(ev, gil_team_id)
+            f = _fixture_from_event(ev, int(gil_id))
             if f:
                 fixtures.append(f)
 
@@ -434,34 +410,16 @@ async def get_all_fixtures():
             "past_fixtures": len(past_fixtures),
             "upcoming_fixtures": len(upcoming_fixtures),
             "fixtures": fixtures,
-            "data_source": "sofascore",
-            "cache_info": "Fixtures from SofaScore (cached for 1h)",
+            "data_source": "whoscored",
+            "cache_info": "Fixtures from WhoScored (cached for 1h)",
         }
 
         await cache.set("fixtures", "all_gil_vicente", result, ttl=3600)
-        logger.info(f"Cached {len(fixtures)} fixtures from SofaScore")
         return result
 
-    except httpx.HTTPStatusError as e:
-        status = getattr(e.response, "status_code", None)
-        logger.error(f"Error fetching fixtures from SofaScore: {e}")
-        if status == 403:
-            scraper_result = _build_scraper_fixtures()
-            if scraper_result:
-                await cache.set("fixtures", "all_gil_vicente", scraper_result, ttl=3600)
-                return scraper_result
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "SofaScore denied this request (HTTP 403). This environment may be blocked. "
-                    "Run: docker compose exec backend python scripts/sofascore_diagnose.py"
-                ),
-            )
-        raise HTTPException(status_code=502, detail=str(e))
-
     except Exception as e:
-        logger.error(f"Error fetching fixtures from SofaScore: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
+        logger.error("Error fetching fixtures from WhoScored: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @router.get("/fixtures/upcoming")
@@ -477,7 +435,7 @@ async def get_upcoming_fixtures(limit: int = Query(default=5, ge=1, le=50)):
         "team": "Gil Vicente",
         "fixtures": sliced,
         "count": len(sliced),
-        "data_source": all_data.get("data_source", "sofascore"),
+        "data_source": all_data.get("data_source", "whoscored"),
         "cache_info": all_data.get("cache_info", ""),
     }
 
@@ -501,11 +459,11 @@ async def get_opponents():
     opponents.sort(key=lambda x: x.get("name") or "")
 
     return {
-        "season": 2025,
+        "season": datetime.now().year,
         "opponents": opponents,
         "count": len(opponents),
         "source": "Extracted from fixtures",
-        "data_source": all_data.get("data_source", "sofascore"),
+        "data_source": all_data.get("data_source", "whoscored"),
         "cache_info": "Opponents from fixtures data",
         "warning": all_data.get("warning"),
     }
@@ -555,8 +513,8 @@ async def get_opponent_recent_form(team_id: str, limit: int = 5):
             "losses": losses,
             "form_percentage": form_percentage,
         },
-        "source": "Derived from SofaScore league matches",
-        "data_source": analysis.get("data_source", "sofascore"),
+        "source": "Derived from WhoScored league matches",
+        "data_source": analysis.get("data_source", "whoscored"),
     }
 
 

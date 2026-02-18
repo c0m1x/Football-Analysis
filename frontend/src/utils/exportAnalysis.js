@@ -33,6 +33,33 @@ const fixtureDateTime = (fixture) => {
 
 const safeArr = (v) => (Array.isArray(v) ? v : [])
 
+const escapeHtml = (value) =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+
+const buildReportHtml = ({ title, body }) => `<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #111827; }
+    h1 { font-size: 22px; margin: 0 0 10px; }
+    h2 { font-size: 16px; margin: 22px 0 8px; border-bottom: 1px solid #d1d5db; padding-bottom: 4px; }
+    p, li { font-size: 13px; line-height: 1.5; }
+    .meta { background: #f3f4f6; padding: 10px; border-radius: 8px; }
+    .note { background: #fef3c7; color: #92400e; padding: 10px; border-radius: 8px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+${body}
+</body>
+</html>`
+
 export const exportFixtureAnalysis = (fixture, statistics, tacticalPlan, format) => {
   if (!fixture || !statistics || !tacticalPlan) return
 
@@ -65,6 +92,71 @@ export const exportFixtureAnalysis = (fixture, statistics, tacticalPlan, format)
     a.download = `${baseName}_analysis_${day}.json`
     a.click()
     URL.revokeObjectURL(url)
+    return
+  }
+
+  const custom = tacticalPlan?.customized_suggestions || {}
+  const validationNote =
+    tacticalPlan?.historical_context?.validation_note ||
+    statistics?.historical_context?.validation_note ||
+    'Baseado em dados da época 2023/24 — validar com observação recente do adversário.'
+
+  const renderCustomItems = (items = []) =>
+    safeArr(items)
+      .map((x) => `<li><strong>${escapeHtml(x?.title || '—')}</strong>: ${escapeHtml(x?.detail || '')}</li>`)
+      .join('')
+
+  const htmlBody = `
+    <h1>Relatório Tático - Gil Vicente vs ${escapeHtml(opponent)}</h1>
+    <div class="meta">
+      <p><strong>Data:</strong> ${escapeHtml(
+        dt && !Number.isNaN(dt.getTime()) ? dt.toLocaleString('pt-PT') : `${fixture.date || 'N/A'} ${fixture.time || ''}`
+      )}</p>
+      <p><strong>Local:</strong> ${escapeHtml(isHome ? 'Casa' : 'Fora')}</p>
+      <p><strong>Fonte stats:</strong> ${escapeHtml(statistics?.data_source || 'N/A')}</p>
+      <p><strong>Fonte plano:</strong> ${escapeHtml(tacticalPlan?.data_source || 'N/A')}</p>
+    </div>
+    <div class="note">${escapeHtml(validationNote)}</div>
+
+    <h2>Sistema de Jogo Recomendado</h2>
+    <ul>${renderCustomItems(custom?.recommended_system)}</ul>
+
+    <h2>Zonas a Explorar no Ataque</h2>
+    <ul>${renderCustomItems(custom?.attack_zones)}</ul>
+
+    <h2>Vulnerabilidades Defensivas</h2>
+    <ul>${renderCustomItems(custom?.defensive_vulnerabilities)}</ul>
+
+    <h2>Neutralizar Pontos Fortes</h2>
+    <ul>${renderCustomItems(custom?.neutralize_strengths)}</ul>
+
+    <h2>Ajustes em Bolas Paradas</h2>
+    <ul>${renderCustomItems(custom?.set_piece_adjustments)}</ul>
+  `
+
+  if (format === 'word') {
+    const html = buildReportHtml({ title: `${opponent} Tactical Report`, body: htmlBody })
+    const blob = new Blob([html], { type: 'application/msword' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${baseName}_analysis_${day}.doc`
+    a.click()
+    URL.revokeObjectURL(url)
+    return
+  }
+
+  if (format === 'pdf') {
+    const html = buildReportHtml({ title: `${opponent} Tactical Report`, body: htmlBody })
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.open()
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => {
+      win.print()
+    }, 350)
     return
   }
 
@@ -105,6 +197,9 @@ export const exportFixtureAnalysis = (fixture, statistics, tacticalPlan, format)
   txt += '-'.repeat(60) + '\n'
   txt += `Statistics: ${statistics?.data_source || 'N/A'}\n`
   txt += `Tactical Plan: ${tacticalPlan?.data_source || 'N/A'}\n`
+  if (tacticalPlan?.historical_context?.validation_note) {
+    txt += `Validation note: ${tacticalPlan.historical_context.validation_note}\n`
+  }
   if (statistics?.cache_info) txt += `Stats cache: ${statistics.cache_info}\n`
   if (tacticalPlan?.cache_info) txt += `Plan cache: ${tacticalPlan.cache_info}\n`
   txt += '\n'
@@ -185,4 +280,3 @@ export const exportFixtureAnalysis = (fixture, statistics, tacticalPlan, format)
   a.click()
   URL.revokeObjectURL(url)
 }
-

@@ -1,25 +1,4 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: gil_vicente_db
-    environment:
-      POSTGRES_USER: gil_vicente_user
-      POSTGRES_PASSWORD: gil_vicente_pass
-      POSTGRES_DB: gil_vicente_tactical
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./database/schemas:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gil_vicente_user -d gil_vicente_tactical"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # Redis Cache
   redis:
     image: redis:7-alpine
@@ -45,14 +24,17 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql://gil_vicente_user:gil_vicente_pass@postgres:5432/gil_vicente_tactical
       REDIS_HOST: redis
       REDIS_PORT: 6379
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     volumes:
       - ./backend:/app
       - ./data:/app/data
@@ -67,8 +49,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
-  postgres_data:
   redis_data:

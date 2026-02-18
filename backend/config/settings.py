@@ -15,11 +15,6 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     
-    # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/gil_vicente_tactical"
-    DATABASE_POOL_SIZE: int = 10
-    DATABASE_MAX_OVERFLOW: int = 20
-    
     # Redis Cache
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
@@ -27,24 +22,28 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: str = ""
     CACHE_TTL: int = 3600  # 1 hour
     
-    # SofaScore Configuration
-    SOFASCORE_ENABLED: bool = True
-    SOFASCORE_BASE_URL: str = "https://www.sofascore.com/api/v1"
-    SOFASCORE_TIMEOUT_SECONDS: float = 20.0
-    SOFASCORE_USER_AGENT: str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    SOFASCORE_BASE_URLS: str = ""  # comma-separated fallbacks
-    SOFASCORE_HEADERS_JSON: str = ""  # optional extra headers for scraping
-    SOFASCORE_COOKIES_JSON: str = ""  # optional cookies for scraping
-    SOFASCORE_PROXY: str = ""  # optional http/https proxy URL
-    SOFASCORE_TEAM_ID_MAP_JSON: str = ""  # optional: {"Gil Vicente": 12345, "FC Porto": 67890}
+    # WhoScored via soccerdata
+    WHOSCORED_ENABLED: bool = True
+    WHOSCORED_LEAGUES: str = "POR-Liga Portugal,POR-Primeira Liga,POR-Liga NOS"
+    WHOSCORED_SEASONS: str = ""
+    WHOSCORED_CACHE_SECONDS: int = 1800
+    WHOSCORED_NO_CACHE: bool = False
+    WHOSCORED_DATA_DIR: str = ""
+    
+    # Historical baseline control
+    HISTORICAL_BASELINE_SEASON: str = "2023/24"
+    HISTORICAL_VALIDATION_NOTE: str = (
+        "Baseado em dados da época 2023/24 — validar com observação recente do adversário."
+    )
 
-    # Local Scraper Export Fallback
-    # Directory where `scrapper/scrapper.py` writes JSON exports (repo root by default).
-    SCRAPER_EXPORT_DIR: str = ""
+    # Anthropic (optional natural language generation)
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-latest"
+    ANTHROPIC_TIMEOUT_SECONDS: int = 12
 
     # Gil Vicente Configuration
-    GIL_VICENTE_TEAM_ID: int = 9764  # SofaScore team ID
-    GIL_VICENTE_LEAGUE_ID: int = 61  # Liga Portugal
+    GIL_VICENTE_TEAM_ID: int = 9764
+    GIL_VICENTE_TEAM_NAME: str = "Gil Vicente"
     OPPONENT_MATCH_HISTORY_LIMIT: int = 10
     
     # CORS - Allow all origins in development

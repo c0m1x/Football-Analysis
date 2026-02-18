@@ -1,13 +1,15 @@
-"""Match Analysis Service driven by SofaScore data (no external paid API)."""
+"""Match analysis service backed by WhoScored (via soccerdata)."""
 
+from __future__ import annotations
+
+import asyncio
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from config.settings import get_settings
 from services.advanced_stats_analyzer import get_advanced_stats_analyzer
-from services.scraper_export_service import get_scraper_export_service
-from services.sofascore_service import get_sofascore_service
 from services.tactical_ai_engine import get_tactical_ai_engine
+from services.whoscored_service import get_whoscored_service
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -23,12 +25,23 @@ def _safe_get(d: Dict, *keys, default=None):
     return cur if cur is not None else default
 
 
+def _to_int(v: object) -> Optional[int]:
+    if v is None:
+        return None
+    try:
+        return int(v)
+    except Exception:
+        try:
+            return int(float(v))
+        except Exception:
+            return None
+
+
 class MatchAnalysisService:
     def __init__(self):
         self.stats_analyzer = get_advanced_stats_analyzer()
         self.ai_engine = get_tactical_ai_engine()
-        self.sofa = get_sofascore_service()
-        self.scraper_exports = get_scraper_export_service()
+        self.data = get_whoscored_service()
 
     def _profile_from_recent_games(self, recent_games_tactical: List[Dict]) -> Dict:
         """Build a stable opponent profile by averaging per-match tactical stats."""
@@ -88,7 +101,6 @@ class MatchAnalysisService:
             },
         }
 
-        # Keep non-numeric/categorical structures from the latest match (best available signal).
         for key in ("pressing_structure", "team_shape", "transitions", "context", "match_info"):
             if key in latest:
                 profile[key] = latest.get(key)
@@ -96,42 +108,49 @@ class MatchAnalysisService:
         return profile
 
     async def analyze_match(self, opponent_id: str, opponent_name: str) -> Dict:
-        """Generate comprehensive match analysis using only SofaScore data."""
+        """Generate comprehensive match analysis using WhoScored data."""
         try:
-            gil_id = str(getattr(settings, "GIL_VICENTE_TEAM_ID", 9764) or 9764)
+            gil_name = str(getattr(settings, "GIL_VICENTE_TEAM_NAME", "Gil Vicente") or "Gil Vicente")
+            gil_id = self.data.resolve_team_id(gil_name)
+            if gil_id is None:
+                gil_id = _to_int(getattr(settings, "GIL_VICENTE_TEAM_ID", None))
+            if gil_id is None:
+                raise RuntimeError("Unable to resolve Gil Vicente team id in WhoScored schedule")
 
-            gil_events = await self.sofa.get_last_finished_events(int(gil_id), limit=10)
-            opp_events = await self.sofa.get_last_finished_events(int(opponent_id), limit=10)
+            opp_id = _to_int(opponent_id)
+            if opp_id is None:
+                opp_id = self.data.resolve_team_id(opponent_name)
+            if opp_id is None:
+                raise RuntimeError(f"Unable to resolve opponent id for '{opponent_name}'")
+
+            gil_events = await asyncio.to_thread(self.data.get_last_finished_events, int(gil_id), 10)
+            opp_events = await asyncio.to_thread(self.data.get_last_finished_events, int(opp_id), 10)
 
             gil_matches = [self._event_to_match(ev) for ev in gil_events if ev]
             opp_matches = [self._event_to_match(ev) for ev in opp_events if ev]
-
             gil_matches = [m for m in gil_matches if m]
             opp_matches = [m for m in opp_matches if m]
 
-            gil_form = self._build_form(gil_matches, gil_id, "Gil Vicente")
-            opp_form = self._build_form(opp_matches, opponent_id, opponent_name)
+            gil_form = self._build_form(gil_matches, str(gil_id), gil_name)
+            opp_form = self._build_form(opp_matches, str(opp_id), opponent_name)
 
-            opponent_advanced_stats: Dict[str, any] = {}
+            opponent_advanced_stats: Dict[str, object] = {}
             if opp_matches:
                 opponent_advanced_stats = self.stats_analyzer.analyze_last_game(opp_matches, opponent_name)
 
-            recent_games_tactical = await self.sofa.get_recent_games_tactical(
-                opponent_name, limit=5, team_id=int(opponent_id)
+            recent_games_tactical = await asyncio.to_thread(
+                self.data.get_recent_games_tactical,
+                opponent_name,
+                5,
+                int(opp_id),
             )
-            data_source = "sofascore"
-            if not recent_games_tactical:
-                recent_games_tactical = self.scraper_exports.load_recent_games_tactical(opponent_name, limit=5)
-                if recent_games_tactical:
-                    data_source = "scraper_export"
 
             if recent_games_tactical:
                 opponent_advanced_stats = self._profile_from_recent_games(recent_games_tactical) or recent_games_tactical[0]
+            elif opp_matches:
+                recent_games_tactical = self.stats_analyzer.analyze_recent_games(opp_matches, opponent_name, limit=5)
 
-            ai_recommendations = self.ai_engine.generate_recommendations(
-                opponent_advanced_stats,
-                None,
-            )
+            ai_recommendations = self.ai_engine.generate_recommendations(opponent_advanced_stats, None)
 
             return {
                 "match": f"Gil Vicente vs {opponent_name}",
@@ -142,17 +161,16 @@ class MatchAnalysisService:
                 "tactical_game_plan": self._generate_game_plan(gil_form, opp_form),
                 "opponent_advanced_stats": opponent_advanced_stats,
                 "recent_games_tactical": recent_games_tactical,
-                "data_source": data_source,
+                "data_source": "whoscored",
                 "ai_recommendations": ai_recommendations,
                 "generated_at": self._get_timestamp(),
             }
 
         except Exception as e:
-            logger.error(f"Analysis error: {str(e)}")
+            logger.error("Analysis error: %s", str(e))
             raise
 
     def _event_to_match(self, event: Dict) -> Optional[Dict]:
-        """Convert a SofaScore event into the lightweight match shape used by analyzers."""
         if not isinstance(event, dict):
             return None
 
@@ -298,9 +316,7 @@ class MatchAnalysisService:
         return {
             "recommended_approach": approach,
             "suggested_formation": formation,
-            "key_focus": "Exploit defensive vulnerabilities"
-            if opp_defense > 1.5
-            else "Maintain defensive solidity",
+            "key_focus": "Exploit defensive vulnerabilities" if opp_defense > 1.5 else "Maintain defensive solidity",
         }
 
     def _get_timestamp(self) -> str:

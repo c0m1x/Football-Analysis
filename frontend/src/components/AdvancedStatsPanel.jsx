@@ -37,6 +37,7 @@ const AdvancedStatsPanel = ({ statistics }) => {
   const recentGames = statistics?.recent_games_tactical || []
   const setPieces = statistics?.set_piece_analytics
   const ctx = statistics?.contextual_psychological
+  const historicalContext = statistics?.historical_context
 
   const scorelineDist = ctx?.scoreline_state_distribution || {}
   const scorelineMode = Object.keys(scorelineDist).sort((a, b) => (scorelineDist[b] || 0) - (scorelineDist[a] || 0))[0]
@@ -63,6 +64,11 @@ const AdvancedStatsPanel = ({ statistics }) => {
             <p className="text-gray-600 mt-1">
               {foundation?.estimated ? 'Estimated from available match context (score/home-away).' : 'From match data.'}
             </p>
+            {historicalContext?.validation_note && (
+              <p className="text-sm text-amber-800 mt-2">
+                {historicalContext.validation_note}
+              </p>
+            )}
           </div>
           <div className="text-sm text-gray-500 text-right">
             <p>Matches: {foundation?.matches_analyzed ?? recentGames.length ?? 0}</p>

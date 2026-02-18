@@ -10,8 +10,8 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-if ! command -v docker-compose &> /dev/null; then
-    echo "ERROR: Docker Compose is not installed. Please install Docker Compose first."
+if ! docker compose version &> /dev/null; then
+    echo "ERROR: Docker Compose plugin is not installed. Please install Docker Compose first."
     exit 1
 fi
 
@@ -27,14 +27,14 @@ fi
 
 # Build and start services
 echo "Starting services..."
-docker-compose up -d
+docker compose up -d --build
 
 echo ""
 echo "Waiting for services to be ready..."
 sleep 10
 
 # Check if services are running
-if docker-compose ps | grep -q "Up"; then
+if docker compose ps | grep -q "Up"; then
     echo ""
     echo "OK: Setup complete!"
     echo ""
@@ -44,14 +44,13 @@ if docker-compose ps | grep -q "Up"; then
     echo "   - API Documentation: http://localhost:8000/docs"
     echo ""
     echo "Next steps:"
-    echo "   1. (Optional) Configure SofaScore settings in .env"
-    echo "   2. (Optional) Run the scraper for offline data: python3 scrapper/scrapper.py"
-    echo "   3. Restart services: docker-compose restart"
-    echo "   4. View logs: docker-compose logs -f"
+    echo "   1. (Optional) Configure WhoScored settings in .env"
+    echo "   2. Restart services: docker compose restart"
+    echo "   3. View logs: docker compose logs -f"
     echo ""
 else
     echo ""
     echo "ERROR: Some services failed to start. Check logs with:"
-    echo "   docker-compose logs"
+    echo "   docker compose logs"
     echo ""
 fi

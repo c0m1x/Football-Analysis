@@ -21,10 +21,11 @@ from utils.logger import setup_logger
 from services.match_analysis_service import get_match_analysis_service
 from services.cache_service import get_cache_service
 from services.advanced_stats_analyzer import get_advanced_stats_analyzer
-from services.sofascore_service import get_sofascore_service
+from config.settings import get_settings
 
 router = APIRouter()
 logger = setup_logger(__name__)
+settings = get_settings()
 
 
 def _safe_div(n: float, d: float, default: float = 0.0) -> float:
@@ -602,6 +603,14 @@ async def get_opponent_statistics(
         result = {
             "opponent": opponent_name,
             "opponent_id": opponent_id,
+            "historical_context": {
+                "baseline_season": getattr(settings, "HISTORICAL_BASELINE_SEASON", "2023/24"),
+                "validation_note": getattr(
+                    settings,
+                    "HISTORICAL_VALIDATION_NOTE",
+                    "Baseado em dados da época 2023/24 — validar com observação recente do adversário.",
+                ),
+            },
             "data_quality": {
                 "matches_analyzed": len(recent_matches),
                 "time_period": "Last 5 matches",
@@ -620,12 +629,10 @@ async def get_opponent_statistics(
             "tactical_foundation": tactical_foundation,
             "set_piece_analytics": set_piece_analytics,
             "contextual_psychological": contextual_psychological,
-            "data_source": full_analysis.get("data_source", "sofascore"),
+            "data_source": full_analysis.get("data_source", "whoscored"),
             "cache_info": (
-                "Fresh data from API (cached for 24h)"
-                if full_analysis.get("data_source") == "sofascore"
-                else "Fresh data from scraper export (cached for 24h)"
-                if full_analysis.get("data_source") == "scraper_export"
+                "Fresh data from WhoScored (cached for 24h)"
+                if full_analysis.get("data_source") == "whoscored"
                 else "Fresh data (cached for 24h)"
             ),
         }

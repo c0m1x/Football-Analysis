@@ -14,6 +14,8 @@ inferred or returned as unavailable.
 
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Query
 
 from utils.logger import setup_logger
@@ -460,6 +462,9 @@ def _aggregate_contextual(recent_analyzed):
 async def get_opponent_statistics(
     opponent_id: str,
     opponent_name: str = Query(..., description="Opponent team name"),
+    team_id: Optional[str] = Query(default=None, description="Selected team id"),
+    team_name: Optional[str] = Query(default=None, description="Selected team name"),
+    league: Optional[str] = Query(default=None, description="League code"),
 ):
     """Get comprehensive opponent statistics with deep analytics.
 
@@ -467,7 +472,7 @@ async def get_opponent_statistics(
     """
 
     cache = get_cache_service()
-    cache_key = f"v3:{opponent_id}_{opponent_name}"
+    cache_key = f"v4:{league or 'default'}:{team_id or ''}:{team_name or ''}:{opponent_id}_{opponent_name}"
 
     cached_data = await cache.get("opponent_stats", cache_key)
     if cached_data:
@@ -478,7 +483,14 @@ async def get_opponent_statistics(
     service = get_match_analysis_service()
 
     try:
-        full_analysis = await service.analyze_match(opponent_id, opponent_name)
+        history_limit = int(getattr(settings, "OPPONENT_MATCH_HISTORY_LIMIT", 10) or 10)
+        full_analysis = await service.analyze_match(
+            opponent_id,
+            opponent_name,
+            team_id=team_id,
+            team_name=team_name,
+            league=league,
+        )
         opponent_form = full_analysis.get("opponent_form", {}) or {}
         form_summary = opponent_form.get("form_summary", {}) or {}
         recent_matches = opponent_form.get("recent_matches", []) or []
@@ -544,7 +556,7 @@ async def get_opponent_statistics(
 
         # Match breakdown (keep structure)
         match_breakdown = []
-        for idx, match in enumerate(recent_matches[:5], start=1):
+        for idx, match in enumerate(recent_matches[:history_limit], start=1):
             home = match.get("home", {}) or {}
             away = match.get("away", {}) or {}
 
@@ -595,7 +607,11 @@ async def get_opponent_statistics(
         analyzer = get_advanced_stats_analyzer()
         recent_games_tactical = full_analysis.get("recent_games_tactical") or []
         if not recent_games_tactical:
-            recent_games_tactical = analyzer.analyze_recent_games(recent_matches, opponent_name, limit=5)
+            recent_games_tactical = analyzer.analyze_recent_games(
+                recent_matches,
+                opponent_name,
+                limit=history_limit,
+            )
         tactical_foundation = _aggregate_tactical(recent_games_tactical)
         set_piece_analytics = _aggregate_set_pieces(recent_games_tactical)
         contextual_psychological = _aggregate_contextual(recent_games_tactical)
@@ -603,6 +619,8 @@ async def get_opponent_statistics(
         result = {
             "opponent": opponent_name,
             "opponent_id": opponent_id,
+            "focus_team": full_analysis.get("focus_team", {}),
+            "league": league,
             "historical_context": {
                 "baseline_season": getattr(settings, "HISTORICAL_BASELINE_SEASON", "2023/24"),
                 "validation_note": getattr(
@@ -613,7 +631,7 @@ async def get_opponent_statistics(
             },
             "data_quality": {
                 "matches_analyzed": len(recent_matches),
-                "time_period": "Last 5 matches",
+                "time_period": f"Last {history_limit} matches",
             },
             "overall_performance": overall_performance,
             "home_performance": home_performance,

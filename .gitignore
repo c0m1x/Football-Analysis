@@ -66,6 +66,8 @@ data/scraper_exports/*
 gil_vicente_next_opponent_*.json
 gil_vicente_next_opponent_*.csv
 data/.scrape_done_*
+data/models/*
+!data/models/.gitkeep
 
 # Testing
 .coverage

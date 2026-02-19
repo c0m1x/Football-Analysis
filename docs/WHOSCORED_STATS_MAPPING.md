@@ -1,7 +1,6 @@
-# Tactical Stats Mapping (WhoScored via soccerdata)
+# WhoScored Stats Mapping (soccerdata)
 
-Este projeto mantém o schema de `recent_games_tactical` e `tactical_foundation`.
-A origem passou para **WhoScored** (via `backend/services/whoscored_service.py`).
+Este projeto usa WhoScored via `soccerdata` com schema de `recent_games_tactical` e `tactical_foundation`.
 
 ## Cobertura atual
 - Preenchidos normalmente:

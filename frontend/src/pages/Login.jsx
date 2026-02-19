@@ -11,7 +11,7 @@ const Login = () => {
   const handleLogin = (e) => {
     e.preventDefault()
     
-    if (username === 'admin' && password === 'GIL2025') {
+    if (username === 'admin' && password === 'FOOTBALL2026') {
       localStorage.setItem('isAuthenticated', 'true')
       navigate('/')
     } else {
@@ -25,7 +25,7 @@ const Login = () => {
       <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Gil Vicente FC
+            Football Tactical Intelligence
           </h1>
           <p className="text-gray-600">Tactical Intelligence Platform</p>
         </div>
@@ -80,7 +80,7 @@ const Login = () => {
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-500">
-          <p>© 2026 Gil Vicente FC - Tactical Intelligence</p>
+          <p>© 2026 Football Tactical Intelligence</p>
         </div>
       </div>
     </div>

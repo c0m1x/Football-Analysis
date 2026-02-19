@@ -2,7 +2,7 @@ services:
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: gil_vicente_redis
+    container_name: football_tactical_redis
     ports:
       - "6379:6379"
     volumes:
@@ -18,7 +18,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: gil_vicente_backend
+    container_name: football_tactical_backend
     ports:
       - "8000:8000"
     env_file:
@@ -45,7 +45,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: gil_vicente_frontend
+    container_name: football_tactical_frontend
     ports:
       - "3000:3000"
     depends_on:

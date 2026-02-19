@@ -159,10 +159,18 @@ class WhoScoredService:
         self.league_candidates = [x.strip() for x in leagues_raw.split(",") if x.strip()]
         if not self.league_candidates:
             self.league_candidates = [
+                "ENG-Premier League",
+                "ESP-La Liga",
+                "ITA-Serie A",
+                "GER-Bundesliga",
+                "FRA-Ligue 1",
                 "POR-Liga Portugal",
-                "POR-Primeira Liga",
-                "POR-Liga NOS",
             ]
+        self.default_league = str(
+            getattr(settings, "WHOSCORED_DEFAULT_LEAGUE", self.league_candidates[0]) or self.league_candidates[0]
+        ).strip()
+        if self.default_league not in self.league_candidates:
+            self.default_league = self.league_candidates[0]
 
         seasons_raw = str(getattr(settings, "WHOSCORED_SEASONS", "") or "").strip()
         self.season_candidates = [x.strip() for x in seasons_raw.split(",") if x.strip()]
@@ -174,10 +182,8 @@ class WhoScoredService:
         self.no_cache = bool(getattr(settings, "WHOSCORED_NO_CACHE", False))
         self.data_dir = str(getattr(settings, "WHOSCORED_DATA_DIR", "") or "").strip() or None
 
-        self._reader = None
-        self._active_league = None
-        self._active_season = None
-        self._schedule_cache: Optional[tuple[float, Any]] = None
+        self._reader_cache: Dict[str, Any] = {}
+        self._schedule_cache: Dict[str, tuple[float, Any]] = {}
         self._events_cache: Dict[str, tuple[float, Any]] = {}
 
     def _import_sd(self):
@@ -201,57 +207,74 @@ class WhoScoredService:
             kwargs["data_dir"] = self.data_dir
         return sd.WhoScored(**kwargs)
 
-    def _get_reader(self):
-        if not self.enabled:
-            raise RuntimeError("WhoScored integration is disabled")
+    def get_available_leagues(self) -> List[str]:
+        return list(self.league_candidates)
 
-        if self._reader is not None:
-            return self._reader
+    def _reader_cache_key(self, league: str, season: str) -> str:
+        return f"{league}::{season}"
 
-        last_error: Optional[Exception] = None
-        for league in self.league_candidates:
-            for season in self.season_candidates:
-                try:
-                    reader = self._new_reader(league, season)
-                    schedule = reader.read_schedule()
-                    if schedule is None or len(schedule) == 0:
-                        continue
-                    self._reader = reader
-                    self._active_league = league
-                    self._active_season = season
-                    logger.info(
-                        "WhoScored reader initialized: league=%s season=%s",
-                        league,
-                        season,
-                    )
-                    return self._reader
-                except Exception as e:
-                    last_error = e
-                    continue
-
-        raise RuntimeError(
-            f"Unable to initialize WhoScored reader for leagues={self.league_candidates} seasons={self.season_candidates}. Last error: {last_error}"
-        )
-
-    def _schedule_df(self):
-        now = time.time()
-        if self._schedule_cache and (now - self._schedule_cache[0]) <= self.cache_seconds:
-            return self._schedule_cache[1]
-
-        reader = self._get_reader()
-        df = reader.read_schedule()
+    def _normalize_schedule_df(self, df: Any) -> Any:
         if df is None:
-            raise RuntimeError("WhoScored returned empty schedule")
-
-        # normalize index/columns for robust downstream access
+            return df
         if hasattr(df, "reset_index"):
             idx_names = [n for n in (getattr(df.index, "names", None) or []) if n]
             if idx_names:
                 df = df.reset_index()
             elif "game" not in list(getattr(df, "columns", [])):
                 df = df.reset_index().rename(columns={"index": "game"})
+        return df
 
-        self._schedule_cache = (now, df)
+    def _resolve_reader_for_league(self, league: Optional[str] = None) -> tuple[Any, str, str]:
+        if not self.enabled:
+            raise RuntimeError("WhoScored integration is disabled")
+
+        league_order: List[str]
+        if league and league.strip():
+            requested = league.strip()
+            league_order = [requested]
+        else:
+            league_order = [self.default_league] + [x for x in self.league_candidates if x != self.default_league]
+
+        last_error: Optional[Exception] = None
+        for lg in league_order:
+            for season in self.season_candidates:
+                key = self._reader_cache_key(lg, season)
+                reader = self._reader_cache.get(key)
+                if reader is None:
+                    try:
+                        reader = self._new_reader(lg, season)
+                        self._reader_cache[key] = reader
+                    except Exception as e:
+                        last_error = e
+                        continue
+                try:
+                    df = reader.read_schedule()
+                    if df is None or len(df) == 0:
+                        continue
+                    return reader, lg, season
+                except Exception as e:
+                    last_error = e
+                    continue
+
+        raise RuntimeError(
+            f"Unable to initialize WhoScored reader for league={league or self.default_league} "
+            f"with seasons={self.season_candidates}. Last error: {last_error}"
+        )
+
+    def _schedule_df(self, league: Optional[str] = None):
+        reader, active_league, active_season = self._resolve_reader_for_league(league)
+        cache_key = self._reader_cache_key(active_league, active_season)
+        now = time.time()
+        cached = self._schedule_cache.get(cache_key)
+        if cached and (now - cached[0]) <= self.cache_seconds:
+            return cached[1]
+
+        df = reader.read_schedule()
+        if df is None:
+            raise RuntimeError("WhoScored returned empty schedule")
+        df = self._normalize_schedule_df(df)
+
+        self._schedule_cache[cache_key] = (now, df)
         return df
 
     @staticmethod
@@ -261,12 +284,18 @@ class WhoScoredService:
                 return row.get(k)
         return None
 
-    def _team_filter_from_name_or_id(self, *, team_id: Optional[int], team_name: Optional[str]) -> _TeamFilter:
+    def _team_filter_from_name_or_id(
+        self,
+        *,
+        team_id: Optional[int],
+        team_name: Optional[str],
+        league: Optional[str] = None,
+    ) -> _TeamFilter:
         if team_id is not None:
             return _TeamFilter(team_id=team_id, team_name=team_name)
 
         if team_name:
-            resolved = self.resolve_team_id(team_name)
+            resolved = self.resolve_team_id(team_name, league=league)
             return _TeamFilter(team_id=resolved, team_name=team_name)
 
         return _TeamFilter(team_id=None, team_name=None)
@@ -338,12 +367,12 @@ class WhoScoredService:
 
         return ev
 
-    def resolve_team_id(self, team_name: str) -> Optional[int]:
+    def resolve_team_id(self, team_name: str, league: Optional[str] = None) -> Optional[int]:
         if not team_name:
             return None
 
         target = _slug(team_name)
-        df = self._schedule_df()
+        df = self._schedule_df(league=league)
 
         best_id = None
         for _, row in df.iterrows():
@@ -361,15 +390,58 @@ class WhoScoredService:
             best_id = _stable_team_id(team_name)
         return int(best_id)
 
+    def resolve_team_name(self, team_id: int, league: Optional[str] = None) -> Optional[str]:
+        try:
+            target_id = int(team_id)
+        except Exception:
+            return None
+
+        df = self._schedule_df(league=league)
+        for _, row in df.iterrows():
+            hid = _to_int(self._row_get(row, ["home_team_id", "home_id"]))
+            aid = _to_int(self._row_get(row, ["away_team_id", "away_id"]))
+            if hid == target_id:
+                name = self._row_get(row, ["home_team", "home"])
+                return str(name) if name else None
+            if aid == target_id:
+                name = self._row_get(row, ["away_team", "away"])
+                return str(name) if name else None
+        return None
+
+    def list_teams(self, league: Optional[str], search: Optional[str] = None, limit: int = 250) -> List[Dict[str, Any]]:
+        df = self._schedule_df(league=league)
+        teams: Dict[int, str] = {}
+        query = _slug(search or "")
+
+        for _, row in df.iterrows():
+            home_name = str(self._row_get(row, ["home_team", "home"]) or "")
+            away_name = str(self._row_get(row, ["away_team", "away"]) or "")
+            home_id = _to_int(self._row_get(row, ["home_team_id", "home_id"])) or _stable_team_id(home_name)
+            away_id = _to_int(self._row_get(row, ["away_team_id", "away_id"])) or _stable_team_id(away_name)
+
+            if home_name:
+                teams[int(home_id)] = home_name
+            if away_name:
+                teams[int(away_id)] = away_name
+
+        out = [
+            {"id": str(team_id), "name": name}
+            for team_id, name in teams.items()
+            if name and (not query or query in _slug(name))
+        ]
+        out.sort(key=lambda t: _slug(t.get("name")))
+        return out[: max(1, int(limit))]
+
     def get_team_events(
         self,
         team_id: int,
         past_limit: int = 30,
         upcoming_limit: int = 15,
         team_name: Optional[str] = None,
+        league: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        df = self._schedule_df()
-        filt = self._team_filter_from_name_or_id(team_id=team_id, team_name=team_name)
+        df = self._schedule_df(league=league)
+        filt = self._team_filter_from_name_or_id(team_id=team_id, team_name=team_name, league=league)
 
         rows = [row for _, row in df.iterrows() if self._row_matches_team(row, filt)]
         events = [self._row_to_event(r) for r in rows]
@@ -382,27 +454,49 @@ class WhoScoredService:
 
         return past[: max(0, int(past_limit))] + upcoming[: max(0, int(upcoming_limit))]
 
-    def get_last_finished_events(self, team_id: int, limit: int = 5, max_pages: int = 3) -> List[Dict[str, Any]]:
+    def get_last_finished_events(
+        self,
+        team_id: int,
+        limit: int = 5,
+        max_pages: int = 3,
+        league: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         _ = max_pages  # compatibility parameter
-        events = self.get_team_events(team_id, past_limit=max(20, int(limit) * 4), upcoming_limit=0)
+        events = self.get_team_events(
+            team_id,
+            past_limit=max(20, int(limit) * 4),
+            upcoming_limit=0,
+            league=league,
+        )
         return [e for e in events if _slug((e.get("status") or {}).get("type")) == "finished"][: max(0, int(limit))]
 
-    def get_upcoming_events(self, team_id: int, limit: int = 5, max_pages: int = 2) -> List[Dict[str, Any]]:
+    def get_upcoming_events(
+        self,
+        team_id: int,
+        limit: int = 5,
+        max_pages: int = 2,
+        league: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         _ = max_pages  # compatibility parameter
-        events = self.get_team_events(team_id, past_limit=0, upcoming_limit=max(10, int(limit) * 2))
+        events = self.get_team_events(
+            team_id,
+            past_limit=0,
+            upcoming_limit=max(10, int(limit) * 2),
+            league=league,
+        )
         out = [e for e in events if _slug((e.get("status") or {}).get("type")) != "finished"]
         out.sort(key=lambda e: int(e.get("startTimestamp") or 0))
         return out[: max(0, int(limit))]
 
-    def _read_events(self, game_id: Any):
-        key = str(game_id)
+    def _read_events(self, game_id: Any, league: Optional[str] = None):
+        key = f"{league or self.default_league}::{game_id}"
         now = time.time()
 
         cached = self._events_cache.get(key)
         if cached and (now - cached[0]) <= self.cache_seconds:
             return cached[1]
 
-        reader = self._get_reader()
+        reader, _, _ = self._resolve_reader_for_league(league)
 
         last_error = None
         for kwargs in ({"match_id": game_id}, {"game_id": game_id}, {"game": game_id}):
@@ -816,12 +910,17 @@ class WhoScoredService:
         team_name: str,
         limit: int = 5,
         team_id: Optional[int] = None,
+        league: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        resolved_id = int(team_id) if team_id is not None else self.resolve_team_id(team_name)
+        resolved_id = int(team_id) if team_id is not None else self.resolve_team_id(team_name, league=league)
         if resolved_id is None:
             return []
 
-        events = self.get_last_finished_events(int(resolved_id), limit=max(1, int(limit) * 3))
+        events = self.get_last_finished_events(
+            int(resolved_id),
+            limit=max(1, int(limit) * 3),
+            league=league,
+        )
         out: List[Dict[str, Any]] = []
 
         for ev in events:
@@ -831,7 +930,7 @@ class WhoScoredService:
             if game_id is None:
                 continue
             try:
-                events_df = self._read_events(game_id)
+                events_df = self._read_events(game_id, league=league)
                 out.append(
                     self._normalize_tactical_from_events(
                         event=ev,

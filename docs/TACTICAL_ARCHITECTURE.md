@@ -13,6 +13,10 @@
   - Pipeline de análise histórica e agregação de métricas.
 - `backend/services/tactical_ai_engine.py`
   - Recomendações base por regras.
+- `backend/services/tactical_ml_service.py`
+  - Treino do modelo ML (classificação de risco + regressão de golos esperados).
+  - Inferência online para ajuste tático.
+  - Fallback automático para regras quando não existe modelo treinado.
 - `backend/services/tactical_recommendation_service.py`
   - Combina histórico + observações atuais.
   - Ajusta confiança devido ao drift temporal.
@@ -21,7 +25,8 @@
 
 ### Frontend (React)
 - `frontend/src/pages/NextOpponent.jsx`
-  - Seleção de adversário (próximo jogo ou manual).
+  - Seleção de liga + equipa.
+  - Resolução automática do próximo adversário.
   - Formulário de observações atuais (até 3 jogos).
   - Recalibração do plano tático via endpoint `POST`.
 - `frontend/src/components/AdvancedStatsPanel.jsx`
@@ -97,6 +102,18 @@ Campos novos:
   - `sample_size`
   - completude dos campos.
 - Divergência forte entre histórico e observado reduz confiança final.
+
+## 5) Pipeline ML
+
+- Dataset: janelas históricas por equipa (últimos `ML_WINDOW_SIZE` jogos) para prever jogo seguinte.
+- Labels reais: resultado (`W/D/L`), golos marcados e sofridos.
+- Modelos:
+  - `RandomForestClassifier` para tendência de resultado.
+  - `RandomForestRegressor` para golos esperados (marcados/sofridos).
+- Artefacto: `ML_MODEL_PATH`.
+- Endpoints:
+  - `GET /api/v1/ml/status`
+  - `POST /api/v1/ml/train`
 
 ## 4) Nota obrigatória por sugestão
 

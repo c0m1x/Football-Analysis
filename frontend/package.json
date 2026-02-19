@@ -1,7 +1,7 @@
 {
-  "name": "gil-vicente-tactical-platform",
+  "name": "football-tactical-platform",
   "version": "1.0.0",
-  "description": "Gil Vicente Tactical Intelligence Platform - Frontend Dashboard",
+  "description": "Football Tactical Intelligence Platform - Frontend Dashboard",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",

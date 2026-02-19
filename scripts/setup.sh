@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Gil Vicente Tactical Intelligence Platform - Setup Script"
+echo "Football Tactical Intelligence Platform - Setup Script"
 echo "=============================================================="
 echo ""
 

@@ -1,7 +1,6 @@
 import React from 'react'
 
 const TEAM_STYLES = {
-  'gil vicente': { bg: '#C41E3A', fg: '#FFFFFF', border: '#003C71' },
   moreirense: { bg: '#0B6E3C', fg: '#FFFFFF', border: '#E2C044' },
   braga: { bg: '#D61F2C', fg: '#FFFFFF', border: '#111827' },
   estoril: { bg: '#F2C14E', fg: '#0B5FA5', border: '#0B5FA5' },

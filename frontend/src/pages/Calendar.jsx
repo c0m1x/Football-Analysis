@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { API_BASE_URL } from '../config/api'
 import { Calendar as CalendarIcon, Clock, Target, RefreshCw } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import TeamBadge from '../components/TeamBadge'
+import { loadSelection, saveSelection } from '../utils/selectionStorage'
 
 const toErrorText = async (res) => {
   const ct = res.headers.get('content-type') || ''
@@ -15,7 +16,91 @@ const toErrorText = async (res) => {
   return await res.text().catch(() => `Request failed: ${res.status}`)
 }
 
+const getLeagueName = (league) => {
+  if (!league) return 'N/A'
+  return league.replace(/^[A-Z]{3}-/, '')
+}
+
 const Calendar = () => {
+  const stored = loadSelection()
+  const [selectedLeague, setSelectedLeague] = useState(stored.league || '')
+  const [selectedTeamId, setSelectedTeamId] = useState(stored.teamId || '')
+  const [selectedTeamName, setSelectedTeamName] = useState(stored.teamName || '')
+
+  const {
+    data: leaguesData,
+    isLoading: loadingLeagues,
+    error: leaguesError,
+    refetch: refetchLeagues,
+    isFetching: fetchingLeagues,
+  } = useQuery({
+    queryKey: ['leagues'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/leagues`)
+      if (!res.ok) throw new Error(await toErrorText(res))
+      return res.json()
+    },
+  })
+
+  const leagues = leaguesData?.leagues || []
+
+  useEffect(() => {
+    if (!selectedLeague && leaguesData?.default_league) {
+      setSelectedLeague(leaguesData.default_league)
+    }
+  }, [selectedLeague, leaguesData?.default_league])
+
+  const {
+    data: teamsData,
+    isLoading: loadingTeams,
+    error: teamsError,
+    refetch: refetchTeams,
+    isFetching: fetchingTeams,
+  } = useQuery({
+    queryKey: ['teams', selectedLeague],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/teams?league=${encodeURIComponent(selectedLeague)}`)
+      if (!res.ok) throw new Error(await toErrorText(res))
+      return res.json()
+    },
+    enabled: !!selectedLeague,
+  })
+
+  const teams = teamsData?.teams || []
+
+  useEffect(() => {
+    if (!selectedLeague || teams.length === 0) return
+
+    const byId = teams.find((t) => String(t.id) === String(selectedTeamId))
+    if (byId) {
+      setSelectedTeamName(byId.name)
+      return
+    }
+
+    const byName = selectedTeamName
+      ? teams.find((t) => String(t.name).toLowerCase() === String(selectedTeamName).toLowerCase())
+      : null
+    if (byName) {
+      setSelectedTeamId(String(byName.id))
+      setSelectedTeamName(byName.name)
+      return
+    }
+
+    const first = teams[0]
+    if (first) {
+      setSelectedTeamId(String(first.id))
+      setSelectedTeamName(first.name)
+    }
+  }, [selectedLeague, teams, selectedTeamId, selectedTeamName])
+
+  useEffect(() => {
+    saveSelection({
+      league: selectedLeague,
+      teamId: selectedTeamId,
+      teamName: selectedTeamName,
+    })
+  }, [selectedLeague, selectedTeamId, selectedTeamName])
+
   const {
     data,
     isLoading,
@@ -23,14 +108,20 @@ const Calendar = () => {
     refetch,
     isFetching,
   } = useQuery({
-    queryKey: ['allFixtures'],
+    queryKey: ['allFixtures', selectedLeague, selectedTeamId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/v1/fixtures/all`)
+      const params = new URLSearchParams({
+        league: selectedLeague,
+        team_id: selectedTeamId,
+        team_name: selectedTeamName,
+      })
+      const res = await fetch(`${API_BASE_URL}/api/v1/fixtures/all?${params.toString()}`)
       if (!res.ok) throw new Error(await toErrorText(res))
       const json = await res.json()
       if (json?.data_source === 'error' && json?.error) throw new Error(String(json.error))
       return json
     },
+    enabled: !!selectedLeague && !!selectedTeamId,
   })
 
   const fixtures = data?.fixtures || []
@@ -45,7 +136,7 @@ const Calendar = () => {
     return upcoming[0] || null
   }, [fixtures])
 
-  if (isLoading) {
+  if (loadingLeagues || loadingTeams || isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="text-center">
@@ -56,14 +147,30 @@ const Calendar = () => {
     )
   }
 
-  if (error) {
+  if (leaguesError || teamsError || error) {
     return (
       <div className="space-y-4">
-        <div className="bg-red-50 border-l-4 border-red-500 p-4">
-          <p className="text-red-700">Erro a carregar calendário: {String(error.message || error)}</p>
-        </div>
+        {leaguesError && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4">
+            <p className="text-red-700">Erro a carregar ligas: {String(leaguesError.message || leaguesError)}</p>
+          </div>
+        )}
+        {teamsError && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4">
+            <p className="text-red-700">Erro a carregar equipas: {String(teamsError.message || teamsError)}</p>
+          </div>
+        )}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-500 p-4">
+            <p className="text-red-700">Erro a carregar calendário: {String(error.message || error)}</p>
+          </div>
+        )}
         <button
-          onClick={() => refetch()}
+          onClick={() => {
+            refetchLeagues()
+            refetchTeams()
+            refetch()
+          }}
           className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
         >
           <RefreshCw size={18} />
@@ -78,6 +185,49 @@ const Calendar = () => {
 
   return (
     <div className="space-y-6">
+      <div className="bg-white rounded-xl border p-4">
+        <p className="text-sm font-semibold text-gray-900">Seleção de contexto</p>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Liga</label>
+            <select
+              value={selectedLeague}
+              onChange={(e) => {
+                setSelectedLeague(e.target.value)
+                setSelectedTeamId('')
+                setSelectedTeamName('')
+              }}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            >
+              {leagues.map((league) => (
+                <option key={league.code} value={league.code}>
+                  {getLeagueName(league.name)}{league.is_training_baseline ? ' (base treino PT)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Equipa</label>
+            <select
+              value={selectedTeamId}
+              onChange={(e) => {
+                const id = e.target.value
+                const found = teams.find((t) => String(t.id) === String(id))
+                setSelectedTeamId(id)
+                setSelectedTeamName(found?.name || '')
+              }}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            >
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
@@ -85,6 +235,9 @@ const Calendar = () => {
             Calendário
           </h2>
           <p className="text-gray-600 mt-2">
+            {selectedTeamName} · {getLeagueName(selectedLeague)}
+          </p>
+          <p className="text-gray-600 mt-1">
             {upcomingCount} jogos por disputar · {pastCount} concluídos
           </p>
         </div>
@@ -101,7 +254,7 @@ const Calendar = () => {
           <button
             onClick={() => refetch()}
             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 hover:bg-black text-white rounded-lg transition-colors disabled:opacity-60"
-            disabled={isFetching}
+            disabled={isFetching || fetchingLeagues || fetchingTeams}
             title="Atualizar"
           >
             <RefreshCw size={18} className={isFetching ? 'animate-spin' : ''} />
@@ -152,8 +305,8 @@ const Calendar = () => {
 
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="flex items-center gap-2">
-                      <TeamBadge name="Gil Vicente" size={34} />
-                      <div className="text-lg font-bold text-gray-900">Gil Vicente</div>
+                      <TeamBadge name={selectedTeamName} size={34} />
+                      <div className="text-lg font-bold text-gray-900">{selectedTeamName}</div>
                     </div>
                     <div className="text-2xl font-bold text-gray-400">vs</div>
                     <div className="flex items-center gap-2">

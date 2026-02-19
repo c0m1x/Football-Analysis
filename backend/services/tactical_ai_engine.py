@@ -2,7 +2,7 @@
 Tactical Engine - Match-to-Tactic Recommendation Model
 Generates Automated tactical recommendations based on match stats
 """
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class TacticalAIEngine:
@@ -11,7 +11,12 @@ class TacticalAIEngine:
     Analyzes opponent stats and generates actionable tactical advice
     """
 
-    def generate_recommendations(self, opponent_stats: Dict, gil_stats: Dict) -> Dict:
+    def generate_recommendations(
+        self,
+        opponent_stats: Dict,
+        team_stats: Optional[Dict],
+        ml_insights: Optional[Dict[str, Any]] = None,
+    ) -> Dict:
         recommendations = {
             "formation_changes": self._recommend_formation(opponent_stats),
             "pressing_adjustments": self._recommend_pressing(opponent_stats),
@@ -22,7 +27,68 @@ class TacticalAIEngine:
             "exploit_weaknesses": self._identify_exploitable_weaknesses(opponent_stats),
             "ai_confidence": self._calculate_confidence(opponent_stats)
         }
+        recommendations["ml_insights"] = ml_insights or {"enabled": False}
+        self._apply_ml_overrides(recommendations, ml_insights)
         return recommendations
+
+    def _apply_ml_overrides(self, recommendations: Dict[str, Any], ml_insights: Optional[Dict[str, Any]]) -> None:
+        if not isinstance(ml_insights, dict) or not ml_insights.get("enabled"):
+            return
+
+        ml_reco = ml_insights.get("recommendations", {}) or {}
+        ml_pred = ml_insights.get("predictions", {}) or {}
+        confidence = float(ml_insights.get("confidence", 0.0) or 0.0)
+        risk_level = str(ml_pred.get("opponent_risk_level") or "medium")
+
+        formation_hint = ml_reco.get("formation_hint")
+        if formation_hint:
+            form_block = recommendations.get("formation_changes", {}) or {}
+            form_recs = form_block.get("recommendations") or []
+            if isinstance(form_recs, list):
+                form_recs.insert(
+                    0,
+                    {
+                        "formation": formation_hint,
+                        "reason": f"ML model ({confidence:.1f}% conf.) risk={risk_level}",
+                        "priority": "HIGH" if risk_level in {"high", "low"} else "MEDIUM",
+                    },
+                )
+                form_block["recommendations"] = form_recs
+                recommendations["formation_changes"] = form_block
+
+        pressing_hint = ml_reco.get("pressing_hint")
+        if pressing_hint:
+            pressing_block = recommendations.get("pressing_adjustments", {}) or {}
+            pressing_recs = pressing_block.get("pressing_recommendations") or []
+            if isinstance(pressing_recs, list):
+                pressing_recs.insert(
+                    0,
+                    {
+                        "adjustment": pressing_hint,
+                        "target_line": "ML-adaptive",
+                        "reason": f"ML risk model guidance ({confidence:.1f}% conf.)",
+                        "priority": "HIGH",
+                    },
+                )
+                pressing_block["pressing_recommendations"] = pressing_recs
+                recommendations["pressing_adjustments"] = pressing_block
+
+        zone_hint = ml_reco.get("attack_focus_hint")
+        if zone_hint:
+            zones_block = recommendations.get("target_zones", {}) or {}
+            zone_list = zones_block.get("priority_zones") or []
+            if isinstance(zone_list, list):
+                zone_list.insert(
+                    0,
+                    {
+                        "zone": str(zone_hint),
+                        "attack_method": "ML-derived emphasis",
+                        "priority": "HIGH",
+                        "expected_outcome": f"Aligned with risk={risk_level}",
+                    },
+                )
+                zones_block["priority_zones"] = zone_list
+                recommendations["target_zones"] = zones_block
 
     # ------------------------------------------------------------------
     # FORMATIONS

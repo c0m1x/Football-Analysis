@@ -25,7 +25,7 @@ const Layout = ({ children }) => {
             <div className="flex items-center space-x-3">
               <TrendingUp size={32} />
               <div>
-                <h1 className="text-2xl font-bold">Gil Vicente FC</h1>
+                <h1 className="text-2xl font-bold">Football Tactical Intelligence</h1>
                 <p className="text-sm text-gray-300">Tactical Intelligence Platform</p>
               </div>
             </div>
@@ -70,7 +70,7 @@ const Layout = ({ children }) => {
       {/* Footer */}
       <footer className="bg-gray-800 text-white py-4">
         <div className="container mx-auto px-4 text-center">
-          <p className="text-sm">© 2025-2026 Gil Vicente FC - Tactical Intelligence Platform</p>
+          <p className="text-sm">© 2025-2026 Football Tactical Intelligence Platform</p>
         </div>
       </footer>
     </div>

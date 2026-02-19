@@ -19,6 +19,7 @@ import AdvancedStatsPanel from '../components/AdvancedStatsPanel'
 import TacticalPlanPanel from '../components/TacticalPlanPanel'
 import { exportFixtureAnalysis } from '../utils/exportAnalysis'
 import TeamBadge from '../components/TeamBadge'
+import { loadSelection, saveSelection } from '../utils/selectionStorage'
 
 const toErrorText = async (res) => {
   const ct = res.headers.get('content-type') || ''
@@ -39,13 +40,6 @@ const badgeClass = (source) => {
   return 'bg-gray-100 text-gray-800'
 }
 
-const normalize = (txt) =>
-  String(txt || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-
 const emptyObservation = () => ({
   match_label: '',
   possession_percent: '',
@@ -61,10 +55,18 @@ const emptyObservation = () => ({
   notes: '',
 })
 
+const getLeagueName = (league) => {
+  if (!league) return 'N/A'
+  return league.replace(/^[A-Z]{3}-/, '')
+}
+
 const NextOpponent = () => {
+  const stored = loadSelection()
   const [activeTab, setActiveTab] = useState('tactical')
-  const [opponentMode, setOpponentMode] = useState('next')
-  const [manualOpponentName, setManualOpponentName] = useState('')
+  const [selectedLeague, setSelectedLeague] = useState(stored.league || '')
+  const [selectedTeamId, setSelectedTeamId] = useState(stored.teamId || '')
+  const [selectedTeamName, setSelectedTeamName] = useState(stored.teamName || '')
+
   const [recalibratedPlan, setRecalibratedPlan] = useState(null)
   const [recalibrating, setRecalibrating] = useState(false)
   const [recalibrationError, setRecalibrationError] = useState('')
@@ -75,83 +77,118 @@ const NextOpponent = () => {
   ])
 
   const {
+    data: leaguesData,
+    isLoading: loadingLeagues,
+    error: leaguesError,
+    refetch: refetchLeagues,
+    isFetching: fetchingLeagues,
+  } = useQuery({
+    queryKey: ['leagues'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/leagues`)
+      if (!res.ok) throw new Error(await toErrorText(res))
+      const json = await res.json()
+      return json
+    },
+  })
+
+  const leagues = leaguesData?.leagues || []
+
+  useEffect(() => {
+    if (!selectedLeague && leaguesData?.default_league) {
+      setSelectedLeague(leaguesData.default_league)
+    }
+  }, [selectedLeague, leaguesData?.default_league])
+
+  const {
+    data: teamsData,
+    isLoading: loadingTeams,
+    error: teamsError,
+    refetch: refetchTeams,
+    isFetching: fetchingTeams,
+  } = useQuery({
+    queryKey: ['teams', selectedLeague],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_URL}/api/v1/teams?league=${encodeURIComponent(selectedLeague)}`)
+      if (!res.ok) throw new Error(await toErrorText(res))
+      return res.json()
+    },
+    enabled: !!selectedLeague,
+  })
+
+  const teams = teamsData?.teams || []
+
+  useEffect(() => {
+    if (!selectedLeague || teams.length === 0) return
+
+    const byId = teams.find((t) => String(t.id) === String(selectedTeamId))
+    if (byId) {
+      setSelectedTeamName(byId.name)
+      return
+    }
+
+    const byName = selectedTeamName
+      ? teams.find((t) => String(t.name).toLowerCase() === String(selectedTeamName).toLowerCase())
+      : null
+    if (byName) {
+      setSelectedTeamId(String(byName.id))
+      setSelectedTeamName(byName.name)
+      return
+    }
+
+    const first = teams[0]
+    if (first) {
+      setSelectedTeamId(String(first.id))
+      setSelectedTeamName(first.name)
+    }
+  }, [selectedLeague, teams, selectedTeamId, selectedTeamName])
+
+  useEffect(() => {
+    saveSelection({
+      league: selectedLeague,
+      teamId: selectedTeamId,
+      teamName: selectedTeamName,
+    })
+  }, [selectedLeague, selectedTeamId, selectedTeamName])
+
+  const {
     data: upcoming,
     isLoading: loadingUpcoming,
     error: upcomingError,
     refetch: refetchUpcoming,
     isFetching: fetchingUpcoming,
   } = useQuery({
-    queryKey: ['fixtures-upcoming', 1],
+    queryKey: ['fixtures-upcoming', selectedLeague, selectedTeamId],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/v1/fixtures/upcoming?limit=1`)
+      const params = new URLSearchParams({
+        league: selectedLeague,
+        team_id: selectedTeamId,
+        team_name: selectedTeamName,
+        limit: '1',
+      })
+      const res = await fetch(`${API_BASE_URL}/api/v1/fixtures/upcoming?${params.toString()}`)
       if (!res.ok) throw new Error(await toErrorText(res))
       return res.json()
     },
-  })
-
-  const {
-    data: opponentsData,
-    isLoading: loadingOpponents,
-    error: opponentsError,
-    refetch: refetchOpponents,
-    isFetching: fetchingOpponents,
-  } = useQuery({
-    queryKey: ['opponents'],
-    queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/api/v1/opponents`)
-      if (!res.ok) throw new Error(await toErrorText(res))
-      return res.json()
-    },
+    enabled: !!selectedLeague && !!selectedTeamId,
   })
 
   const nextFixture = upcoming?.fixtures?.[0] || null
-  const opponents = opponentsData?.opponents || []
-
-  useEffect(() => {
-    if (nextFixture?.opponent_name && !manualOpponentName) {
-      setManualOpponentName(nextFixture.opponent_name)
-    }
-  }, [nextFixture?.opponent_name, manualOpponentName])
-
-  const selectedManualOpponent = useMemo(() => {
-    const target = normalize(manualOpponentName)
-    if (!target) return null
-    return opponents.find((o) => normalize(o?.name) === target) || null
-  }, [manualOpponentName, opponents])
-
-  const selectedOpponent = useMemo(() => {
-    if (opponentMode === 'manual') {
-      if (!selectedManualOpponent) return null
-      return {
-        id: selectedManualOpponent.id,
-        name: selectedManualOpponent.name,
-        fixture: null,
-      }
-    }
-    if (!nextFixture) return null
-    return {
-      id: nextFixture?.opponent_id,
-      name: nextFixture?.opponent_name,
-      fixture: nextFixture,
-    }
-  }, [opponentMode, selectedManualOpponent, nextFixture])
-
-  const opponentId = selectedOpponent?.id
-  const opponentName = selectedOpponent?.name
-  const selectedFixture = selectedOpponent?.fixture
+  const opponentId = nextFixture?.opponent_id || ''
+  const opponentName = nextFixture?.opponent_name || ''
 
   useEffect(() => {
     setRecalibratedPlan(null)
     setRecalibrationError('')
-  }, [opponentId, opponentName])
+  }, [opponentId, opponentName, selectedTeamId, selectedLeague])
 
   const matchDate = useMemo(() => {
-    if (!selectedFixture?.date) return null
-    const time = selectedFixture?.time || '00:00:00'
-    const dt = new Date(`${selectedFixture.date}T${time}`)
+    if (!nextFixture?.date) return null
+    const time = nextFixture?.time || '00:00:00'
+    const dt = new Date(`${nextFixture.date}T${time}`)
     if (Number.isNaN(dt.getTime())) return null
     return dt
-  }, [selectedFixture?.date, selectedFixture?.time])
+  }, [nextFixture?.date, nextFixture?.time])
 
   const {
     data: statistics,
@@ -160,17 +197,21 @@ const NextOpponent = () => {
     refetch: refetchStats,
     isFetching: fetchingStats,
   } = useQuery({
-    queryKey: ['opponent-stats', opponentId, opponentName],
+    queryKey: ['opponent-stats', selectedLeague, selectedTeamId, opponentId, opponentName],
     queryFn: async () => {
-      const res = await fetch(
-        `${API_BASE_URL}/api/v1/opponent-stats/${opponentId}?opponent_name=${encodeURIComponent(opponentName)}`
-      )
+      const params = new URLSearchParams({
+        opponent_name: opponentName,
+        league: selectedLeague,
+        team_id: selectedTeamId,
+        team_name: selectedTeamName,
+      })
+      const res = await fetch(`${API_BASE_URL}/api/v1/opponent-stats/${opponentId}?${params.toString()}`)
       if (!res.ok) throw new Error(await toErrorText(res))
       const json = await res.json()
       if (json?.data_source === 'error' && json?.error) throw new Error(String(json.error))
       return json
     },
-    enabled: !!opponentId && !!opponentName,
+    enabled: !!selectedLeague && !!selectedTeamId && !!opponentId && !!opponentName,
   })
 
   const {
@@ -180,17 +221,21 @@ const NextOpponent = () => {
     refetch: refetchPlan,
     isFetching: fetchingPlan,
   } = useQuery({
-    queryKey: ['tactical-plan', opponentId, opponentName],
+    queryKey: ['tactical-plan', selectedLeague, selectedTeamId, opponentId, opponentName],
     queryFn: async () => {
-      const res = await fetch(
-        `${API_BASE_URL}/api/v1/tactical-plan/${opponentId}?opponent_name=${encodeURIComponent(opponentName)}`
-      )
+      const params = new URLSearchParams({
+        opponent_name: opponentName,
+        league: selectedLeague,
+        team_id: selectedTeamId,
+        team_name: selectedTeamName,
+      })
+      const res = await fetch(`${API_BASE_URL}/api/v1/tactical-plan/${opponentId}?${params.toString()}`)
       if (!res.ok) throw new Error(await toErrorText(res))
       const json = await res.json()
       if (json?.data_source === 'error' && json?.error) throw new Error(String(json.error))
       return json
     },
-    enabled: !!opponentId && !!opponentName,
+    enabled: !!selectedLeague && !!selectedTeamId && !!opponentId && !!opponentName,
   })
 
   const effectivePlan = recalibratedPlan || tacticalPlan || null
@@ -234,7 +279,7 @@ const NextOpponent = () => {
     ].some((v) => String(v || '').trim() !== '')
 
   const submitRecalibration = async () => {
-    if (!opponentId || !opponentName) return
+    if (!opponentId || !opponentName || !selectedTeamId || !selectedLeague) return
     setRecalibrationError('')
     setRecalibrating(true)
     try {
@@ -261,7 +306,13 @@ const NextOpponent = () => {
           })),
       }
 
-      const res = await fetch(`${API_BASE_URL}/api/v1/tactical-plan/${opponentId}/recalibrate`, {
+      const params = new URLSearchParams({
+        team_id: selectedTeamId,
+        team_name: selectedTeamName,
+        league: selectedLeague,
+      })
+
+      const res = await fetch(`${API_BASE_URL}/api/v1/tactical-plan/${opponentId}/recalibrate?${params.toString()}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
@@ -278,37 +329,37 @@ const NextOpponent = () => {
   }
 
   const handleRefresh = async () => {
-    await Promise.all([refetchUpcoming(), refetchOpponents(), refetchStats(), refetchPlan()])
+    await Promise.all([refetchLeagues(), refetchTeams(), refetchUpcoming(), refetchStats(), refetchPlan()])
   }
 
-  if (loadingUpcoming || loadingOpponents) {
+  if (loadingLeagues || loadingTeams) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto" />
-          <p className="mt-4 text-gray-600">A carregar dados de adversários…</p>
+          <p className="mt-4 text-gray-600">A carregar ligas e equipas…</p>
         </div>
       </div>
     )
   }
 
-  if (upcomingError || opponentsError) {
+  if (leaguesError || teamsError) {
     return (
       <div className="space-y-4">
-        {upcomingError && (
+        {leaguesError && (
           <div className="bg-red-50 border-l-4 border-red-500 p-4">
-            <p className="text-red-700">Erro a carregar próximo jogo: {String(upcomingError.message || upcomingError)}</p>
+            <p className="text-red-700">Erro a carregar ligas: {String(leaguesError.message || leaguesError)}</p>
           </div>
         )}
-        {opponentsError && (
+        {teamsError && (
           <div className="bg-red-50 border-l-4 border-red-500 p-4">
-            <p className="text-red-700">Erro a carregar lista de adversários: {String(opponentsError.message || opponentsError)}</p>
+            <p className="text-red-700">Erro a carregar equipas: {String(teamsError.message || teamsError)}</p>
           </div>
         )}
         <button
           onClick={() => {
-            refetchUpcoming()
-            refetchOpponents()
+            refetchLeagues()
+            refetchTeams()
           }}
           className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
         >
@@ -319,18 +370,22 @@ const NextOpponent = () => {
     )
   }
 
-  const unresolvedManualOpponent = opponentMode === 'manual' && manualOpponentName && !selectedManualOpponent
   const dataSourceStats = statistics?.data_source
   const dataSourcePlan = effectivePlan?.data_source
-  const busy = fetchingUpcoming || fetchingOpponents || fetchingStats || fetchingPlan || recalibrating
+  const busy = fetchingLeagues || fetchingTeams || fetchingUpcoming || fetchingStats || fetchingPlan || recalibrating
 
-  const exportFixture = selectedFixture || {
-    opponent_name: opponentName,
-    date: null,
-    time: null,
-    is_home: true,
-    competition: 'Análise manual',
-  }
+  const exportFixture =
+    nextFixture ||
+    ({
+      team_name: selectedTeamName,
+      opponent_name: opponentName,
+      date: null,
+      time: null,
+      is_home: true,
+      competition: selectedLeague,
+    })
+
+  const showSelectionError = !selectedLeague || !selectedTeamId
 
   return (
     <div className="space-y-6">
@@ -341,7 +396,7 @@ const NextOpponent = () => {
             Análise Tática Interativa
           </h2>
           <p className="text-gray-600 mt-2">
-            Histórico {baselineSeason} + ajuste de confiança com observação manual da época atual.
+            Equipa selecionada + próximo adversário. Histórico {baselineSeason} com ajuste manual.
           </p>
         </div>
 
@@ -396,72 +451,81 @@ const NextOpponent = () => {
       </div>
 
       <div className="bg-white rounded-xl border p-4">
-        <p className="text-sm font-semibold text-gray-900">Seleção do adversário</p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setOpponentMode('next')}
-            className={`px-3 py-2 rounded-lg border text-sm font-medium ${
-              opponentMode === 'next'
-                ? 'bg-[#003C71] text-white border-[#003C71]'
-                : 'bg-white text-gray-700 border-gray-300'
-            }`}
-          >
-            Próximo jogo
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpponentMode('manual')}
-            className={`px-3 py-2 rounded-lg border text-sm font-medium ${
-              opponentMode === 'manual'
-                ? 'bg-[#003C71] text-white border-[#003C71]'
-                : 'bg-white text-gray-700 border-gray-300'
-            }`}
-          >
-            Escolher/escrever adversário
-          </button>
-          {opponentMode === 'manual' && (
-            <div className="min-w-[320px] flex-1">
-              <input
-                list="opponents-list"
-                value={manualOpponentName}
-                onChange={(e) => setManualOpponentName(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                placeholder="Escreve ou seleciona nome do adversário"
-              />
-              <datalist id="opponents-list">
-                {opponents.map((o) => (
-                  <option key={o.id} value={o.name} />
-                ))}
-              </datalist>
-            </div>
-          )}
+        <p className="text-sm font-semibold text-gray-900">Seleção de contexto</p>
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Liga</label>
+            <select
+              value={selectedLeague}
+              onChange={(e) => {
+                setSelectedLeague(e.target.value)
+                setSelectedTeamId('')
+                setSelectedTeamName('')
+              }}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            >
+              {leagues.map((league) => (
+                <option key={league.code} value={league.code}>
+                  {getLeagueName(league.name)}{league.is_training_baseline ? ' (base treino PT)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Equipa</label>
+            <select
+              value={selectedTeamId}
+              onChange={(e) => {
+                const id = e.target.value
+                const found = teams.find((t) => String(t.id) === String(id))
+                setSelectedTeamId(id)
+                setSelectedTeamName(found?.name || '')
+              }}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2"
+            >
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        {unresolvedManualOpponent && (
-          <p className="text-sm text-red-700 mt-2">
-            Adversário não encontrado na lista atual. Seleciona um nome válido.
-          </p>
-        )}
+        <p className="text-xs text-gray-500 mt-3">
+          Liga atual: {getLeagueName(selectedLeague)}
+        </p>
       </div>
 
-      {!selectedOpponent && (
+      {showSelectionError && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
+          <p className="text-yellow-800">Seleciona uma liga e uma equipa para gerar análise.</p>
+        </div>
+      )}
+
+      {upcomingError && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4">
+          <p className="text-red-700">Erro a carregar próximo jogo: {String(upcomingError.message || upcomingError)}</p>
+        </div>
+      )}
+
+      {!upcomingError && !loadingUpcoming && !nextFixture && selectedTeamId && (
         <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4">
           <p className="text-yellow-800">
-            Nenhum adversário selecionado. Escolhe um adversário para gerar o relatório.
+            Sem próximo jogo encontrado para {selectedTeamName} em {getLeagueName(selectedLeague)}.
           </p>
         </div>
       )}
 
-      {selectedOpponent && (
+      {nextFixture && (
         <div className="bg-white rounded-2xl shadow-md border overflow-hidden">
           <div className="bg-gradient-to-r from-[#003C71] to-[#0B5FA5] text-white p-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
-                <p className="text-sm opacity-90">{selectedFixture ? 'Jogo' : 'Análise personalizada'}</p>
+                <p className="text-sm opacity-90">Próximo jogo</p>
                 <h3 className="text-2xl font-bold flex items-center gap-3 flex-wrap">
                   <span className="inline-flex items-center gap-2">
-                    <TeamBadge name="Gil Vicente" size={40} />
-                    <span>Gil Vicente</span>
+                    <TeamBadge name={selectedTeamName} size={40} />
+                    <span>{selectedTeamName}</span>
                   </span>
                   <span className="text-white/80">vs</span>
                   <span className="inline-flex items-center gap-2">
@@ -469,33 +533,27 @@ const NextOpponent = () => {
                     <span>{opponentName}</span>
                   </span>
                 </h3>
-                {selectedFixture ? (
-                  <div className="flex flex-wrap items-center gap-3 mt-3 text-sm opacity-95">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${selectedFixture.is_home ? 'bg-green-200 text-green-900' : 'bg-orange-200 text-orange-900'}`}>
-                      {selectedFixture.is_home ? 'CASA' : 'FORA'}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Calendar size={14} />
-                      {matchDate
-                        ? matchDate.toLocaleDateString('pt-PT', { weekday: 'long', day: '2-digit', month: 'long' })
-                        : selectedFixture.date || 'TBD'}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Clock size={14} />
-                      {matchDate
-                        ? matchDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
-                        : selectedFixture.time || 'TBD'}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <MapPin size={14} />
-                      {selectedFixture.is_home ? 'Estádio Cidade de Barcelos' : 'Fora'}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-sm mt-3 opacity-95">
-                    Análise sem fixture associado: usa histórico + observações manuais.
-                  </p>
-                )}
+                <div className="flex flex-wrap items-center gap-3 mt-3 text-sm opacity-95">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${nextFixture.is_home ? 'bg-green-200 text-green-900' : 'bg-orange-200 text-orange-900'}`}>
+                    {nextFixture.is_home ? 'CASA' : 'FORA'}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar size={14} />
+                    {matchDate
+                      ? matchDate.toLocaleDateString('pt-PT', { weekday: 'long', day: '2-digit', month: 'long' })
+                      : nextFixture.date || 'TBD'}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock size={14} />
+                    {matchDate
+                      ? matchDate.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
+                      : nextFixture.time || 'TBD'}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin size={14} />
+                    {nextFixture.is_home ? 'Home' : 'Away'}
+                  </span>
+                </div>
               </div>
 
               <div className="text-right">

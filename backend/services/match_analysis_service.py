@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 from config.settings import get_settings
 from services.advanced_stats_analyzer import get_advanced_stats_analyzer
 from services.tactical_ai_engine import get_tactical_ai_engine
+from services.tactical_ml_service import get_tactical_ml_service
 from services.whoscored_service import get_whoscored_service
 from utils.logger import setup_logger
 
@@ -41,6 +42,7 @@ class MatchAnalysisService:
     def __init__(self):
         self.stats_analyzer = get_advanced_stats_analyzer()
         self.ai_engine = get_tactical_ai_engine()
+        self.ml_service = get_tactical_ml_service()
         self.data = get_whoscored_service()
 
     def _profile_from_recent_games(self, recent_games_tactical: List[Dict]) -> Dict:
@@ -107,32 +109,72 @@ class MatchAnalysisService:
 
         return profile
 
-    async def analyze_match(self, opponent_id: str, opponent_name: str) -> Dict:
+    async def analyze_match(
+        self,
+        opponent_id: str,
+        opponent_name: str,
+        *,
+        team_id: Optional[str] = None,
+        team_name: Optional[str] = None,
+        league: Optional[str] = None,
+    ) -> Dict:
         """Generate comprehensive match analysis using WhoScored data."""
         try:
-            gil_name = str(getattr(settings, "GIL_VICENTE_TEAM_NAME", "Gil Vicente") or "Gil Vicente")
-            gil_id = self.data.resolve_team_id(gil_name)
-            if gil_id is None:
-                gil_id = _to_int(getattr(settings, "GIL_VICENTE_TEAM_ID", None))
-            if gil_id is None:
-                raise RuntimeError("Unable to resolve Gil Vicente team id in WhoScored schedule")
+            history_limit = int(getattr(settings, "OPPONENT_MATCH_HISTORY_LIMIT", 10) or 10)
+
+            focus_name = str(team_name or getattr(settings, "DEFAULT_FOCUS_TEAM_NAME", "") or "").strip()
+            focus_id = _to_int(team_id)
+            if focus_id is None and focus_name:
+                focus_id = self.data.resolve_team_id(focus_name, league=league)
+            if focus_id is None:
+                fallback_id = _to_int(getattr(settings, "DEFAULT_FOCUS_TEAM_ID", None))
+                if fallback_id is not None:
+                    focus_id = fallback_id
+            if not focus_name and focus_id is not None:
+                focus_name = self.data.resolve_team_name(int(focus_id), league=league) or f"Team {focus_id}"
+            if not focus_name:
+                focus_name = "Selected Team"
 
             opp_id = _to_int(opponent_id)
             if opp_id is None:
-                opp_id = self.data.resolve_team_id(opponent_name)
+                opp_id = self.data.resolve_team_id(opponent_name, league=league)
             if opp_id is None:
                 raise RuntimeError(f"Unable to resolve opponent id for '{opponent_name}'")
 
-            gil_events = await asyncio.to_thread(self.data.get_last_finished_events, int(gil_id), 10)
-            opp_events = await asyncio.to_thread(self.data.get_last_finished_events, int(opp_id), 10)
+            focus_events = []
+            if focus_id is not None:
+                focus_events = await asyncio.to_thread(
+                    self.data.get_last_finished_events,
+                    int(focus_id),
+                    history_limit,
+                    3,
+                    league,
+                )
+            opp_events = await asyncio.to_thread(
+                self.data.get_last_finished_events,
+                int(opp_id),
+                history_limit,
+                3,
+                league,
+            )
 
-            gil_matches = [self._event_to_match(ev) for ev in gil_events if ev]
+            focus_matches = [self._event_to_match(ev) for ev in focus_events if ev]
             opp_matches = [self._event_to_match(ev) for ev in opp_events if ev]
-            gil_matches = [m for m in gil_matches if m]
+            focus_matches = [m for m in focus_matches if m]
             opp_matches = [m for m in opp_matches if m]
 
-            gil_form = self._build_form(gil_matches, str(gil_id), gil_name)
-            opp_form = self._build_form(opp_matches, str(opp_id), opponent_name)
+            focus_form = self._build_form(
+                focus_matches,
+                str(focus_id or ""),
+                focus_name,
+                limit=history_limit,
+            )
+            opp_form = self._build_form(
+                opp_matches,
+                str(opp_id),
+                opponent_name,
+                limit=history_limit,
+            )
 
             opponent_advanced_stats: Dict[str, object] = {}
             if opp_matches:
@@ -141,26 +183,42 @@ class MatchAnalysisService:
             recent_games_tactical = await asyncio.to_thread(
                 self.data.get_recent_games_tactical,
                 opponent_name,
-                5,
+                history_limit,
                 int(opp_id),
+                league,
             )
 
             if recent_games_tactical:
                 opponent_advanced_stats = self._profile_from_recent_games(recent_games_tactical) or recent_games_tactical[0]
             elif opp_matches:
-                recent_games_tactical = self.stats_analyzer.analyze_recent_games(opp_matches, opponent_name, limit=5)
+                recent_games_tactical = self.stats_analyzer.analyze_recent_games(
+                    opp_matches,
+                    opponent_name,
+                    limit=history_limit,
+                )
 
-            ai_recommendations = self.ai_engine.generate_recommendations(opponent_advanced_stats, None)
+            ml_insights = self.ml_service.predict(
+                opponent_stats=opponent_advanced_stats,
+                recent_games_tactical=recent_games_tactical,
+            )
+            ai_recommendations = self.ai_engine.generate_recommendations(
+                opponent_advanced_stats,
+                None,
+                ml_insights=ml_insights,
+            )
 
             return {
-                "match": f"Gil Vicente vs {opponent_name}",
-                "gil_vicente_form": gil_form,
+                "match": f"{focus_name} vs {opponent_name}",
+                "league": league,
+                "focus_team": {"id": str(focus_id) if focus_id is not None else None, "name": focus_name},
+                "focus_team_form": focus_form,
                 "opponent_form": opp_form,
                 "defensive_vulnerabilities": self._analyze_defensive_vulnerabilities(opp_form),
-                "gil_attacking_analysis": self._analyze_gil_attacking(gil_form),
-                "tactical_game_plan": self._generate_game_plan(gil_form, opp_form),
+                "focus_team_attacking_analysis": self._analyze_focus_team_attacking(focus_form),
+                "tactical_game_plan": self._generate_game_plan(focus_form, opp_form),
                 "opponent_advanced_stats": opponent_advanced_stats,
                 "recent_games_tactical": recent_games_tactical,
+                "ml_insights": ml_insights,
                 "data_source": "whoscored",
                 "ai_recommendations": ai_recommendations,
                 "generated_at": self._get_timestamp(),
@@ -213,10 +271,10 @@ class MatchAnalysisService:
             },
         }
 
-    def _build_form(self, matches: List[Dict], team_id: str, team_name: str) -> Dict:
+    def _build_form(self, matches: List[Dict], team_id: str, team_name: str, limit: int = 5) -> Dict:
         matches_sorted = list(matches)
         matches_sorted.sort(key=lambda x: (x.get("status", {}) or {}).get("utcTime", ""), reverse=True)
-        recent_matches = matches_sorted[:5]
+        recent_matches = matches_sorted[: max(1, int(limit))]
         form = self._calculate_form(recent_matches, team_id)
         return {
             "team_name": team_name,
@@ -286,8 +344,8 @@ class MatchAnalysisService:
         goals_conceded = away.get("score") if is_home else home.get("score")
         return int(goals_conceded or 0) == 0
 
-    def _analyze_gil_attacking(self, gil_form: Dict) -> Dict:
-        form = gil_form.get("form_summary", {})
+    def _analyze_focus_team_attacking(self, team_form: Dict) -> Dict:
+        form = team_form.get("form_summary", {})
 
         return {
             "scoring_rate": form.get("avg_goals_scored", 0),
@@ -299,14 +357,14 @@ class MatchAnalysisService:
             else "Weak",
         }
 
-    def _generate_game_plan(self, gil_form: Dict, opp_form: Dict) -> Dict:
-        gil_attack = gil_form.get("form_summary", {}).get("avg_goals_scored", 0)
+    def _generate_game_plan(self, team_form: Dict, opp_form: Dict) -> Dict:
+        team_attack = team_form.get("form_summary", {}).get("avg_goals_scored", 0)
         opp_defense = opp_form.get("form_summary", {}).get("avg_goals_conceded", 0)
 
         if opp_defense > 1.5:
             approach = "Aggressive - Opponent is defensively weak"
             formation = "4-3-3 or 4-2-4"
-        elif gil_attack >= 1.5:
+        elif team_attack >= 1.5:
             approach = "Balanced - Capitalize on good form"
             formation = "4-2-3-1"
         else:

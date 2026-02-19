@@ -7,9 +7,9 @@ export default {
   theme: {
     extend: {
       colors: {
-        'gil-blue': '#003C71',
-        'gil-red': '#C41E3A',
-        'gil-gold': '#FFD700',
+        'club-blue': '#003C71',
+        'club-red': '#C41E3A',
+        'club-gold': '#FFD700',
       }
     },
   },

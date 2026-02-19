@@ -3,7 +3,7 @@ Tactical Plan API - Automated recommendations with Redis caching (WhoScored data
 """
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 import httpx
 from pydantic import BaseModel, Field
 
@@ -61,6 +61,9 @@ def _build_tactical_plan_payload(
 
     return {
         "opponent": opponent_name,
+        "focus_team": full_analysis.get("focus_team", {}),
+        "league": full_analysis.get("league"),
+        "ml_insights": full_analysis.get("ml_insights", {}),
         "tactical_plan": {
             "formation_recommendations": {
                 "suggested_changes": ai_recs.get("formation_changes", []),
@@ -135,14 +138,20 @@ def _build_tactical_plan_payload(
 
 
 @router.get("/{opponent_id}")
-async def get_tactical_plan(opponent_id: str, opponent_name: str):
+async def get_tactical_plan(
+    opponent_id: str,
+    opponent_name: str,
+    team_id: Optional[str] = Query(default=None),
+    team_name: Optional[str] = Query(default=None),
+    league: Optional[str] = Query(default=None),
+):
     """
     Get automated tactical plan with embedded statistical evidence sourced from WhoScored.
 
     Cached for 24 hours to avoid re-scraping.
     """
     cache = get_cache_service()
-    cache_key = f"{opponent_id}_{opponent_name}"
+    cache_key = f"{league or 'default'}::{team_id or ''}::{team_name or ''}::{opponent_id}_{opponent_name}"
 
     cached_data = await cache.get("tactical_plan", cache_key)
     if cached_data:
@@ -154,7 +163,13 @@ async def get_tactical_plan(opponent_id: str, opponent_name: str):
         analysis_service = get_match_analysis_service()
         recommendation_service = get_tactical_recommendation_service()
 
-        full_analysis = await analysis_service.analyze_match(opponent_id, opponent_name)
+        full_analysis = await analysis_service.analyze_match(
+            opponent_id,
+            opponent_name,
+            team_id=team_id,
+            team_name=team_name,
+            league=league,
+        )
         customization = await recommendation_service.build_customized_recommendations(
             opponent_name=opponent_name,
             opponent_advanced_stats=full_analysis.get("opponent_advanced_stats", {}),
@@ -181,12 +196,24 @@ async def get_tactical_plan(opponent_id: str, opponent_name: str):
 
 
 @router.post("/{opponent_id}/recalibrate")
-async def recalibrate_tactical_plan(opponent_id: str, payload: RecalibrationRequest):
+async def recalibrate_tactical_plan(
+    opponent_id: str,
+    payload: RecalibrationRequest,
+    team_id: Optional[str] = Query(default=None),
+    team_name: Optional[str] = Query(default=None),
+    league: Optional[str] = Query(default=None),
+):
     """Recalibrate tactical suggestions using manually observed current-season data."""
     try:
         analysis_service = get_match_analysis_service()
         recommendation_service = get_tactical_recommendation_service()
-        full_analysis = await analysis_service.analyze_match(opponent_id, payload.opponent_name)
+        full_analysis = await analysis_service.analyze_match(
+            opponent_id,
+            payload.opponent_name,
+            team_id=team_id,
+            team_name=team_name,
+            league=league,
+        )
 
         customization = await recommendation_service.build_customized_recommendations(
             opponent_name=payload.opponent_name,

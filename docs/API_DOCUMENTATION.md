@@ -3,7 +3,7 @@
 Base URL: `http://localhost:8000/api/v1`
 
 ## Data Source
-- WhoScored via `soccerdata`.
+- WhoScored via `soccerdata` (Python).
 - A API devolve `data_source` (`whoscored`, `cache`, `manual`, `error`) em vários endpoints.
 
 ## Endpoints
@@ -12,28 +12,33 @@ Base URL: `http://localhost:8000/api/v1`
 - `GET /health`
 - `GET /health/ready`
 
-### Fixtures
-- `GET /fixtures/all`
-- `GET /fixtures/upcoming?limit=5`
+### Discovery
+- `GET /leagues`
+- `GET /teams?league=ENG-Premier League`
 
-### Opponents
-- `GET /opponents`
-- `GET /opponents/{team_id}/recent?limit=5`
-- `GET /opponents/{team_id}/tactical?limit=5`
+### Fixtures
+- `GET /fixtures/all?league=...&team_id=...`
+- `GET /fixtures/upcoming?league=...&team_id=...&limit=1`
+- `GET /next-opponent?league=...&team_id=...`
 
 ### Deep Stats
-- `GET /opponent-stats/{opponent_id}?opponent_name=...`
+- `GET /opponent-stats/{opponent_id}?opponent_name=...&team_id=...&team_name=...&league=...`
 
 ### Tactical Plan
-- `GET /tactical-plan/{opponent_id}?opponent_name=...`
-- `POST /tactical-plan/{opponent_id}/recalibrate`
+- `GET /tactical-plan/{opponent_id}?opponent_name=...&team_id=...&team_name=...&league=...`
+- `POST /tactical-plan/{opponent_id}/recalibrate?team_id=...&team_name=...&league=...`
   - body: `opponent_name` + `current_season_observations[]`
-  - recalibra confiança e sugestões usando observação manual da época atual
 
 ### Match Analysis
-- `GET /match-analysis/{opponent_id}?opponent_name=...`
+- `GET /match-analysis/{opponent_id}?opponent_name=...&team_id=...&team_name=...&league=...`
 
-## Notas de resposta
-- O schema de `recent_games_tactical` mantém compatibilidade com o frontend.
+### ML Model
+- `GET /ml/status`
+- `POST /ml/train`
+  - body opcional: `leagues[]`, `force`
+
+## Notas
+- As sugestões táticas usam histórico do adversário (últimos 10 jogos por defeito).
+- A referência portuguesa para treino pode ser mantida via `PORTUGUESE_TRAINING_LEAGUE`.
 - Campos indisponíveis no feed de origem podem aparecer como `null`.
-- As sugestões táticas incluem contexto histórico (`historical_context`) e nota de validação.
+- O motor tático usa modelo ML quando disponível; sem modelo treinado, cai para regras heurísticas.

@@ -3,14 +3,14 @@ Configuration settings for the application
 """
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
     """Application settings"""
     
     # Application
-    APP_NAME: str = "Gil Vicente Tactical Intelligence Platform"
+    APP_NAME: str = "Football Tactical Intelligence Platform"
     DEBUG: bool = True
     HOST: str = "0.0.0.0"
     PORT: int = 8000
@@ -24,11 +24,16 @@ class Settings(BaseSettings):
     
     # WhoScored via soccerdata
     WHOSCORED_ENABLED: bool = True
-    WHOSCORED_LEAGUES: str = "POR-Liga Portugal,POR-Primeira Liga,POR-Liga NOS"
+    WHOSCORED_LEAGUES: str = (
+        "ENG-Premier League,ESP-La Liga,ITA-Serie A,GER-Bundesliga,"
+        "FRA-Ligue 1,POR-Liga Portugal"
+    )
     WHOSCORED_SEASONS: str = ""
     WHOSCORED_CACHE_SECONDS: int = 1800
     WHOSCORED_NO_CACHE: bool = False
     WHOSCORED_DATA_DIR: str = ""
+    WHOSCORED_DEFAULT_LEAGUE: str = "ENG-Premier League"
+    PORTUGUESE_TRAINING_LEAGUE: str = "POR-Liga Portugal"
     
     # Historical baseline control
     HISTORICAL_BASELINE_SEASON: str = "2023/24"
@@ -41,10 +46,20 @@ class Settings(BaseSettings):
     ANTHROPIC_MODEL: str = "claude-3-5-sonnet-latest"
     ANTHROPIC_TIMEOUT_SECONDS: int = 12
 
-    # Gil Vicente Configuration
-    GIL_VICENTE_TEAM_ID: int = 9764
-    GIL_VICENTE_TEAM_NAME: str = "Gil Vicente"
+    # Analysis configuration
+    DEFAULT_FOCUS_TEAM_ID: Optional[int] = None
+    DEFAULT_FOCUS_TEAM_NAME: str = ""
     OPPONENT_MATCH_HISTORY_LIMIT: int = 10
+
+    # ML Tactical Model
+    ML_ENABLED: bool = True
+    ML_MODEL_PATH: str = "data/models/tactical_model.joblib"
+    ML_AUTO_TRAIN_IF_MISSING: bool = False
+    ML_TRAINING_LEAGUES: str = "POR-Liga Portugal,ENG-Premier League,ESP-La Liga"
+    ML_WINDOW_SIZE: int = 5
+    ML_MIN_SAMPLES: int = 120
+    ML_MAX_TEAMS_PER_LEAGUE: int = 20
+    ML_MATCHES_PER_TEAM: int = 28
     
     # CORS - Allow all origins in development
     CORS_ORIGINS: List[str] = ["*"]

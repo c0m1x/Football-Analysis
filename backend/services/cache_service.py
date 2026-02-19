@@ -49,7 +49,7 @@ class CacheService:
     
     def _get_cache_key(self, cache_type: str, identifier: str) -> str:
         """Generate cache key with namespace"""
-        return f"gil_vicente:{cache_type}:{identifier}"
+        return f"football_tactical:{cache_type}:{identifier}"
     
     async def get(self, cache_type: str, identifier: str) -> Optional[Dict[str, Any]]:
         """
@@ -170,9 +170,9 @@ class CacheService:
         
         try:
             if cache_type:
-                pattern = f"gil_vicente:{cache_type}:*"
+                pattern = f"football_tactical:{cache_type}:*"
             else:
-                pattern = "gil_vicente:*"
+                pattern = "football_tactical:*"
             
             keys = []
             async for key in self.redis_client.scan_iter(match=pattern):
@@ -205,7 +205,7 @@ class CacheService:
             opponent_stats_count = 0
             tactical_plan_count = 0
             
-            async for key in self.redis_client.scan_iter(match="gil_vicente:*"):
+            async for key in self.redis_client.scan_iter(match="football_tactical:*"):
                 if ":fixtures:" in key:
                     fixtures_count += 1
                 elif ":opponent_stats:" in key:

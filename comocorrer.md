@@ -9,7 +9,7 @@ No root do projeto:
 
 Também podes usar `make up`.
 
-Login: `admin / GIL2025`
+Login: `admin / FOOTBALL2026`
 
 ### Opção B: Local (sem Docker)
 Terminal 1 (backend):
@@ -30,3 +30,16 @@ URLs:
 - Frontend: `http://localhost:3000`
 - Backend: `http://localhost:8000`
 - Swagger: `http://localhost:8000/docs`
+
+## Fluxo novo
+1. Escolhe a liga.
+2. Escolhe a equipa.
+3. A plataforma identifica o próximo adversário.
+4. A análise tática usa os últimos 10 jogos do adversário (configurável em `OPPONENT_MATCH_HISTORY_LIMIT`).
+
+## Treino do modelo ML
+- Estado do modelo: `GET http://localhost:8000/api/v1/ml/status`
+- Treinar modelo (API): `POST http://localhost:8000/api/v1/ml/train`
+- Treinar modelo (script):
+  1. `source backend/.venv/bin/activate` (se usares venv local)
+  2. `python3 scripts/train_ml_model.py --league POR-Liga Portugal --force`

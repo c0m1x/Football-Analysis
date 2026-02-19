@@ -13,7 +13,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "service": "Gil Vicente Tactical Intelligence Platform"
+        "service": "Football Tactical Intelligence Platform"
     }
 
 

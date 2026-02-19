@@ -16,11 +16,9 @@ const safeBool = (v) => {
   return Boolean(v)
 }
 
-const isGilHomeFromFixture = (fixture) => {
+const isHomeFromFixture = (fixture) => {
   if (!fixture) return false
-  if (fixture.is_gil_home !== undefined) return safeBool(fixture.is_gil_home)
   if (fixture.is_home !== undefined) return safeBool(fixture.is_home)
-  if (fixture.gil_vicente_home !== undefined) return safeBool(fixture.gil_vicente_home)
   return false
 }
 
@@ -63,12 +61,15 @@ ${body}
 export const exportFixtureAnalysis = (fixture, statistics, tacticalPlan, format) => {
   if (!fixture || !statistics || !tacticalPlan) return
 
-  const isHome = isGilHomeFromFixture(fixture)
+  const isHome = isHomeFromFixture(fixture)
   const dt = fixtureDateTime(fixture)
+  const teamName =
+    fixture.team_name || statistics?.focus_team?.name || tacticalPlan?.focus_team?.name || 'Selected Team'
   const opponent = fixture.opponent_name || statistics.opponent || tacticalPlan.opponent || 'Opponent'
 
   const exportData = {
     match: {
+      team: teamName,
       opponent,
       date: fixture.date,
       time: fixture.time,
@@ -107,7 +108,7 @@ export const exportFixtureAnalysis = (fixture, statistics, tacticalPlan, format)
       .join('')
 
   const htmlBody = `
-    <h1>Relatório Tático - Gil Vicente vs ${escapeHtml(opponent)}</h1>
+    <h1>Relatório Tático - ${escapeHtml(teamName)} vs ${escapeHtml(opponent)}</h1>
     <div class="meta">
       <p><strong>Data:</strong> ${escapeHtml(
         dt && !Number.isNaN(dt.getTime()) ? dt.toLocaleString('pt-PT') : `${fixture.date || 'N/A'} ${fixture.time || ''}`
@@ -181,15 +182,15 @@ export const exportFixtureAnalysis = (fixture, statistics, tacticalPlan, format)
   const ps = f?.pressing_structure || {}
 
   let txt = ''
-  txt += 'GIL VICENTE FC — TACTICAL ANALYSIS REPORT\n'
+  txt += 'FOOTBALL TACTICAL ANALYSIS REPORT\n'
   txt += '='.repeat(60) + '\n\n'
-  txt += `Match: Gil Vicente vs ${opponent}\n`
+  txt += `Match: ${teamName} vs ${opponent}\n`
   if (dt && !Number.isNaN(dt.getTime())) {
     txt += `Date: ${dt.toLocaleString('pt-PT')}\n`
   } else if (fixture.date) {
     txt += `Date: ${fixture.date} ${fixture.time || ''}\n`
   }
-  txt += `Venue: ${isHome ? 'Home (Estádio Cidade de Barcelos)' : 'Away'}\n`
+  txt += `Venue: ${isHome ? 'Home' : 'Away'}\n`
   if (fixture.competition) txt += `Competition: ${fixture.competition}\n`
   txt += '\n'
 
